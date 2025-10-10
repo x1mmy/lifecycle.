@@ -2,11 +2,13 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { Eye, EyeOff, Package } from 'lucide-react';
 import { useSupabaseAuth } from '~/hooks/useSupabaseAuth';
 import { validateEmail } from '~/utils/validation';
 import { useToast } from '~/hooks/use-toast';
+import { supabase } from '~/lib/supabase';
+import { withBasePath } from '~/lib/basePath';
 
 export const LoginForm = () => {
   const [email, setEmail] = useState('');
@@ -15,7 +17,7 @@ export const LoginForm = () => {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useSupabaseAuth();
-  const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
 
   /**
@@ -54,16 +56,28 @@ export const LoginForm = () => {
       const result = await login(email, password);
       
       if (result.success) {
-        // Show success message
-        toast({
-          title: 'Welcome back!',
-          description: 'You have successfully logged in.',
+        // Decide destination (respect redirectTo query param)
+        const redirectTo = searchParams.get('redirectTo');
+        const destination = redirectTo ?? (result.isAdmin ? '/admin' : '/dashboard');
+        const fullUrl = withBasePath(destination);
+
+        // Show success toast
+        toast({ title: 'Welcome back!', description: 'You have successfully logged in.' });
+
+        // Wait for Supabase to persist cookies, then hard navigate so middleware sees them
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+          if (event === 'SIGNED_IN') {
+            subscription.unsubscribe();
+            window.location.replace(fullUrl);
+          }
         });
-        
-        // Send user to appropriate page based on their role
-        // Admin users → /admin page, 
-        // Regular users → /dashboard page
-        router.push(result.isAdmin ? '/admin' : '/dashboard');
+
+        // Fallback: if session already present, navigate immediately
+        const { data: s } = await supabase.auth.getSession();
+        if (s.session) {
+          subscription.unsubscribe();
+          window.location.replace(fullUrl);
+        }
       } else {
         // Show error message from server
         toast({
