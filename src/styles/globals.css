@@ -3,4 +3,27 @@
 @theme {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif,
     "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  
+  /* Color palette */
+  --color-background: oklch(1 0 0);
+  --color-foreground: oklch(0.145 0.052 285.82);
+  --color-card: oklch(1 0 0);
+  --color-card-foreground: oklch(0.145 0.052 285.82);
+  --color-popover: oklch(1 0 0);
+  --color-popover-foreground: oklch(0.145 0.052 285.82);
+  --color-primary: oklch(0.598 0.227 274.03);
+  --color-primary-foreground: oklch(0.961 0.013 247.86);
+  --color-secondary: oklch(0.961 0.013 247.86);
+  --color-secondary-foreground: oklch(0.214 0.042 285.96);
+  --color-muted: oklch(0.961 0.013 247.86);
+  --color-muted-foreground: oklch(0.554 0.046 256.85);
+  --color-accent: oklch(0.961 0.013 247.86);
+  --color-accent-foreground: oklch(0.214 0.042 285.96);
+  --color-destructive: oklch(0.638 0.237 27.33);
+  --color-destructive-foreground: oklch(0.961 0.013 247.86);
+  --color-border: oklch(0.904 0.021 255.51);
+  --color-input: oklch(0.904 0.021 255.51);
+  --color-ring: oklch(0.598 0.227 274.03);
+  
+  --radius: 0.5rem;
 }
