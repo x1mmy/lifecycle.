@@ -8,7 +8,7 @@ import { TRPCReactProvider } from "~/trpc/react";
 export const metadata: Metadata = {
   title: "LifeCycle - Inventory Management",
   description: "Track product expiration dates and manage inventory efficiently",
-  icons: [{ rel: "icon", url: "/favicon.ico" }],
+  icons: [{ rel: "icon", url: "/app/package.png" }],
 };
 
 const geist = Geist({
