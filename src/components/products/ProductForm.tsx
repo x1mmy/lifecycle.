@@ -6,7 +6,8 @@ import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { Textarea } from '~/components/ui/textarea';
-import { useToast } from '~/hooks/use-toast';   
+import { useToast } from '~/hooks/use-toast';
+import { api } from '~/trpc/react';   
 
 interface ProductFormProps {
   product?: Product;
@@ -29,41 +30,51 @@ export const ProductForm = ({ product, onSubmit, onClose }: ProductFormProps) =>
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [barcode, setBarcode] = useState('');
-  const [isLookingUp, setIsLookingUp] = useState(false);
+  
+  // Use tRPC mutation for barcode lookup (server-side API call)
+  const barcodeLookup = api.products.lookupBarcode.useMutation();
 
   const handleChange = (field: string, value: string | number) => {
     setFormData({ ...formData, [field]: value });
     setErrors({ ...errors, [field]: '' });
   };
 
+  /**
+   * Barcode Lookup Handler
+   * Now uses server-side tRPC endpoint instead of direct API call
+   * Benefits:
+   * - API calls happen on server (more secure)
+   * - Centralized error handling
+   * - Can add rate limiting/caching later
+   * - Easier to switch barcode providers
+   */
   const lookupBarcode = async (barcodeValue: string) => {
     if (!barcodeValue.trim()) return;
 
-    setIsLookingUp(true);
     try {
-      // Using Open Food Facts API for product lookup
-      const response = await fetch(`https://world.openfoodfacts.org/api/v0/product/${barcodeValue.trim()}.json`);
-      const data: Record<string, any> = await response.json(); // eslint-disable-line @typescript-eslint/no-unsafe-assignment
+      // Call server-side tRPC endpoint
+      const result = await barcodeLookup.mutateAsync({
+        barcode: barcodeValue.trim(),
+      });
 
-      if (data.status === 1 && data.product) {
-        const productData: Record<string, any> = data.product as Record<string, any>; // eslint-disable-line @typescript-eslint/no-unsafe-assignment
-        
-        // Auto-fill form fields with API data
+      // Check if product was found
+      if (result.found && result.data) {
         const updates: Record<string, string | number> = {};
         
-        if (productData.product_name && !formData.name) {
-          updates.name = productData.product_name as string;
+        // Auto-fill form fields with data from barcode lookup
+        if (result.data.name && !formData.name) {
+          updates.name = result.data.name;
         }
         
-        if (productData.categories && !formData.category) {
-          const categories = productData.categories.split(',') as string[]; // eslint-disable-line @typescript-eslint/no-unsafe-assignment
-          updates.category = categories[0]?.trim() ?? '';
+        if (result.data.category && !formData.category) {
+          updates.category = result.data.category;
         }
         
-        if (productData.brands && !formData.supplier) {
-          updates.supplier = productData.brands as string;
+        if (result.data.supplier && !formData.supplier) {
+          updates.supplier = result.data.supplier;
         }
 
+        // Update form if we got any data
         if (Object.keys(updates).length > 0) {
           setFormData({ ...formData, ...updates });
           toast({
@@ -77,20 +88,21 @@ export const ProductForm = ({ product, onSubmit, onClose }: ProductFormProps) =>
           });
         }
       } else {
+        // Product not found
         toast({
           title: "Product not found",
-          description: "Barcode not found in database. Please enter details manually.",
+          description: result.message || "Barcode not found in database. Please enter details manually.",
           variant: "destructive",
         });
       }
     } catch (error) {
+      // Network or server error
+      console.error('Barcode lookup error:', error);
       toast({
         title: "Lookup failed",
         description: "Could not look up barcode. Please enter details manually.",
         variant: "destructive",
       });
-    } finally {
-      setIsLookingUp(false);
     }
   };
 
@@ -138,13 +150,14 @@ export const ProductForm = ({ product, onSubmit, onClose }: ProductFormProps) =>
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
       <div className="bg-card rounded-xl shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
         {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-card">
+        <div className="flex items-center justify-between p-6 border-b border-border sticky top-0 bg-card z-10">
           <h2 className="text-xl font-semibold text-foreground">
             {product ? 'Edit Product' : 'Add New Product'}
           </h2>
           <button
             onClick={onClose}
-            className="p-2 hover:bg-accent rounded-lg transition-smooth"
+            className="p-2 hover:bg-accent rounded-lg transition-colors"
+            type="button"
           >
             <X className="h-5 w-5" />
           </button>
@@ -169,15 +182,15 @@ export const ProductForm = ({ product, onSubmit, onClose }: ProductFormProps) =>
                 onKeyPress={handleBarcodeKeyPress}
                 placeholder="Scan or enter barcode..."
                 className="flex-1"
-                disabled={isLookingUp}
+                disabled={barcodeLookup.isPending}
               />
               <Button
                 type="button"
                 onClick={() => lookupBarcode(barcode)}
-                disabled={isLookingUp || !barcode.trim()}
+                disabled={barcodeLookup.isPending || !barcode.trim()}
                 variant="outline"
               >
-                {isLookingUp ? 'Looking up...' : 'Lookup'}
+                {barcodeLookup.isPending ? 'Looking up...' : 'Lookup'}
               </Button>
             </div>
           </div>
