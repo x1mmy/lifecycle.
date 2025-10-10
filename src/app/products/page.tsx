@@ -1,16 +1,29 @@
-'use client';
+"use client";
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
-import { Plus, Search, Loader2, Edit2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Package, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
-import { useSupabaseAuth } from '~/hooks/useSupabaseAuth';
-import { supabase } from '~/lib/supabase';
-import type { Product } from '~/types';
-import { Header } from '~/components/layout/Header';
-import { ProductForm } from '~/components/products/ProductForm';
-import { getDaysUntilExpiry, formatDate } from '~/utils/dateUtils';
-import { useToast } from '~/hooks/use-toast';
-import { api } from '~/trpc/react';
+import { useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter } from "next/navigation";
+import {
+  Plus,
+  Search,
+  Loader2,
+  Edit2,
+  Trash2,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Package,
+  ChevronLeft,
+  ChevronRight,
+  AlertCircle,
+} from "lucide-react";
+import { useSupabaseAuth } from "~/hooks/useSupabaseAuth";
+import { supabase } from "~/lib/supabase";
+import type { Product } from "~/types";
+import { Header } from "~/components/layout/Header";
+import { ProductForm } from "~/components/products/ProductForm";
+import { getDaysUntilExpiry, formatDate } from "~/utils/dateUtils";
+import { useToast } from "~/hooks/use-toast";
+import { api } from "~/trpc/react";
 
 /**
  * Database Product Row Type
@@ -51,21 +64,23 @@ const transformProductFromDb = (row: ProductRow): Product => ({
 });
 
 // Type definitions for product filtering, sorting, and pagination
-type FilterType = 'all' | 'expired' | 'expiring-soon' | 'good';
-type SortField = 'name' | 'category' | 'expiryDate' | 'quantity';
-type SortDirection = 'asc' | 'desc';
+type FilterType = "all" | "expired" | "expiring-soon" | "good";
+type SortField = "name" | "category" | "expiryDate" | "status" | "quantity";
+type SortDirection = "asc" | "desc";
 
 export default function ProductsPage() {
   const { user, loading, isAuthenticated } = useSupabaseAuth();
   const router = useRouter();
   const { toast } = useToast();
-  
+
   // Core product data and UI state
   const [products, setProducts] = useState<Product[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [productsLoading, setProductsLoading] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(undefined);
+  const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(
+    undefined,
+  );
 
   /**
    * Filter State
@@ -75,16 +90,16 @@ export default function ProductsPage() {
    * - expiring-soon: Products expiring within 7 days
    * - good: Products with more than 7 days until expiry
    */
-  const [activeFilter, setActiveFilter] = useState<FilterType>('all');
-  
+  const [activeFilter, setActiveFilter] = useState<FilterType>("all");
+
   /**
    * Sort State
    * Enables sorting by product attributes with ascending/descending order
    * Default: Sort by expiry date (soonest first)
    */
-  const [sortField, setSortField] = useState<SortField>('expiryDate');
-  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
-  
+  const [sortField, setSortField] = useState<SortField>("expiryDate");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+
   /**
    * Pagination State
    * Manages table pagination for better performance with large datasets
@@ -93,14 +108,14 @@ export default function ProductsPage() {
    */
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  
+
   /**
    * Delete Confirmation Modal State
    * Custom modal replaces browser's confirm() dialog for better UX
    */
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
-  
+
   /**
    * tRPC Mutations for CRUD Operations
    * All data modifications go through backend API for validation and business logic
@@ -109,7 +124,7 @@ export default function ProductsPage() {
   const createProductMutation = api.products.create.useMutation();
   const updateProductMutation = api.products.update.useMutation();
   const deleteProductMutation = api.products.delete.useMutation();
-  
+
   /**
    * Load products for the current user from Supabase
    * Direct client-side fetch for fast data retrieval
@@ -117,34 +132,36 @@ export default function ProductsPage() {
    */
   const loadUserProducts = useCallback(async () => {
     if (!user) return;
-    
+
     setProductsLoading(true);
     try {
       const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('expiry_date', { ascending: true });
+        .from("products")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("expiry_date", { ascending: true });
 
       if (error) {
-        console.error('Error loading products:', error);
+        console.error("Error loading products:", error);
         toast({
-          title: 'Error',
-          description: 'Failed to load products',
-          variant: 'destructive',
+          title: "Error",
+          description: "Failed to load products",
+          variant: "destructive",
         });
         return;
       }
 
       // Transform database rows to Product interface
-      const transformedProducts = (data as ProductRow[]).map(transformProductFromDb);
+      const transformedProducts = (data as ProductRow[]).map(
+        transformProductFromDb,
+      );
       setProducts(transformedProducts);
     } catch (error) {
-      console.error('Unexpected error loading products:', error);
+      console.error("Unexpected error loading products:", error);
       toast({
-        title: 'Error',
-        description: 'Failed to load products',
-        variant: 'destructive',
+        title: "Error",
+        description: "Failed to load products",
+        variant: "destructive",
       });
     } finally {
       setProductsLoading(false);
@@ -154,7 +171,7 @@ export default function ProductsPage() {
   // Authentication check - redirect to login if not authenticated
   useEffect(() => {
     if (!loading && !isAuthenticated) {
-      router.push('/login');
+      router.push("/login");
     }
   }, [isAuthenticated, loading, router]);
 
@@ -171,32 +188,32 @@ export default function ProductsPage() {
    * 1. Applies search filter (name, category, batch number)
    * 2. Applies status filter (all, expired, expiring-soon, good)
    * 3. Sorts by selected field and direction
-   * 
+   *
    * Memoized for performance - only recalculates when dependencies change
    */
   const filteredAndSortedProducts = useMemo(() => {
     let result = [...products];
 
     // Step 1: Apply search filter across multiple fields
-    if (searchTerm.trim() !== '') {
+    if (searchTerm.trim() !== "") {
       result = result.filter(
         (product) =>
           product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.batchNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+          product.batchNumber?.toLowerCase().includes(searchTerm.toLowerCase()),
       );
     }
 
     // Step 2: Apply status filter based on expiry date
-    if (activeFilter !== 'all') {
+    if (activeFilter !== "all") {
       result = result.filter((product) => {
         const daysUntil = getDaysUntilExpiry(product.expiryDate);
         switch (activeFilter) {
-          case 'expired':
+          case "expired":
             return daysUntil < 0; // Past expiry date
-          case 'expiring-soon':
+          case "expiring-soon":
             return daysUntil >= 0 && daysUntil <= 7; // Within 7 days
-          case 'good':
+          case "good":
             return daysUntil > 7; // More than 7 days
           default:
             return true;
@@ -211,19 +228,24 @@ export default function ProductsPage() {
 
       // Get comparable values based on sort field
       switch (sortField) {
-        case 'name':
+        case "name":
           aVal = a.name.toLowerCase();
           bVal = b.name.toLowerCase();
           break;
-        case 'category':
+        case "category":
           aVal = a.category.toLowerCase();
           bVal = b.category.toLowerCase();
           break;
-        case 'expiryDate':
+        case "expiryDate":
           aVal = new Date(a.expiryDate).getTime();
           bVal = new Date(b.expiryDate).getTime();
           break;
-        case 'quantity':
+        case "status":
+          // Sort by expiry date priority (products expiring first)
+          aVal = new Date(a.expiryDate).getTime();
+          bVal = new Date(b.expiryDate).getTime();
+          break;
+        case "quantity":
           aVal = a.quantity;
           bVal = b.quantity;
           break;
@@ -231,8 +253,8 @@ export default function ProductsPage() {
           return 0;
       }
 
-      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
       return 0;
     });
 
@@ -263,8 +285,9 @@ export default function ProductsPage() {
   const filterCounts = useMemo(() => {
     return {
       all: products.length,
-      expired: products.filter((p) => getDaysUntilExpiry(p.expiryDate) < 0).length,
-      'expiring-soon': products.filter((p) => {
+      expired: products.filter((p) => getDaysUntilExpiry(p.expiryDate) < 0)
+        .length,
+      "expiring-soon": products.filter((p) => {
         const days = getDaysUntilExpiry(p.expiryDate);
         return days >= 0 && days <= 7;
       }).length,
@@ -280,11 +303,11 @@ export default function ProductsPage() {
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       // Toggle direction if clicking the same field
-      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+      setSortDirection(sortDirection === "asc" ? "desc" : "asc");
     } else {
       // Set new field with ascending direction
       setSortField(field);
-      setSortDirection('asc');
+      setSortDirection("asc");
     }
   };
 
@@ -326,7 +349,9 @@ export default function ProductsPage() {
    * Uses tRPC mutations for server-side validation and business logic
    * After mutation, refreshes data with loadUserProducts()
    */
-  const handleSubmitProduct = async (productData: Omit<Product, 'id' | 'addedDate'>) => {
+  const handleSubmitProduct = async (
+    productData: Omit<Product, "id" | "addedDate">,
+  ) => {
     if (!user) return;
 
     try {
@@ -365,7 +390,7 @@ export default function ProductsPage() {
             location: productData.location,
             notes: productData.notes,
           },
-          });
+        });
 
         toast({
           title: "Product added",
@@ -377,7 +402,7 @@ export default function ProductsPage() {
       await loadUserProducts();
       handleCloseForm();
     } catch (error) {
-      console.error('Error saving product:', error);
+      console.error("Error saving product:", error);
       toast({
         title: "Error",
         description: "Failed to save product. Please try again.",
@@ -408,12 +433,12 @@ export default function ProductsPage() {
 
       // Reload products from client-side
       await loadUserProducts();
-      
+
       // Close modal
       setDeleteModalOpen(false);
       setProductToDelete(null);
     } catch (error) {
-      console.error('Error deleting product:', error);
+      console.error("Error deleting product:", error);
       toast({
         title: "Error",
         description: "Failed to delete product. Please try again.",
@@ -425,34 +450,34 @@ export default function ProductsPage() {
   // Get status badge for a product
   const getStatusBadge = (expiryDate: string) => {
     const daysUntil = getDaysUntilExpiry(expiryDate);
-    
+
     if (daysUntil < 0) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+        <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
           Expired {Math.abs(daysUntil)}d ago
         </span>
       );
     } else if (daysUntil === 0) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+        <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-800">
           0d left
         </span>
       );
     } else if (daysUntil <= 7) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">
+        <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
           {daysUntil}d left
         </span>
       );
     } else if (daysUntil <= 30) {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+        <span className="inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">
           {daysUntil}d left
         </span>
       );
     } else {
       return (
-        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+        <span className="inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800">
           {daysUntil}d left
         </span>
       );
@@ -462,11 +487,11 @@ export default function ProductsPage() {
   // Show loading spinner while checking authentication
   if (loading || productsLoading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
           <p className="text-gray-500">
-            {loading ? 'Loading...' : 'Loading products...'}
+            {loading ? "Loading..." : "Loading products..."}
           </p>
         </div>
       </div>
@@ -481,30 +506,30 @@ export default function ProductsPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-     
+
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Products</h1>
+          <h1 className="mb-2 text-3xl font-bold text-gray-900">Products</h1>
           <p className="text-gray-500">
             Manage your inventory and track expiration dates
           </p>
         </div>
 
         {/* Actions Bar */}
-        <div className="flex flex-col sm:flex-row gap-4 mb-6">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <Search className="absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
               type="text"
               placeholder="Search products..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 w-full px-4 py-2 border border-gray-200 bg-white rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2 pl-10 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-indigo-500 focus:outline-none"
             />
           </div>
-          <button 
+          <button
             onClick={handleAddProduct}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2 font-medium"
+            className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition-colors hover:bg-indigo-700"
           >
             <Plus className="h-4 w-4" />
             Add Product
@@ -512,139 +537,99 @@ export default function ProductsPage() {
         </div>
 
         {/* Filter Chips */}
-        <div className="flex flex-wrap gap-2 mb-6">
+        <div className="mb-6 flex flex-wrap gap-2">
           <button
-            onClick={() => setActiveFilter('all')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-              activeFilter === 'all'
-                ? 'bg-indigo-600 text-white shadow-md'
-                : 'bg-white text-gray-700 border border-gray-200 hover:border-indigo-300 hover:bg-indigo-50'
+            onClick={() => setActiveFilter("all")}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+              activeFilter === "all"
+                ? "bg-indigo-600 text-white shadow-md"
+                : "border border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50"
             }`}
           >
             All
-            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-              activeFilter === 'all' ? 'bg-indigo-500' : 'bg-gray-100'
-            }`}>
+            <span
+              className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
+                activeFilter === "all" ? "bg-indigo-500" : "bg-gray-100"
+              }`}
+            >
               {filterCounts.all}
             </span>
           </button>
           <button
-            onClick={() => setActiveFilter('expired')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-              activeFilter === 'expired'
-                ? 'bg-red-600 text-white shadow-md'
-                : 'bg-white text-gray-700 border border-gray-200 hover:border-red-300 hover:bg-red-50'
+            onClick={() => setActiveFilter("expired")}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+              activeFilter === "expired"
+                ? "bg-red-600 text-white shadow-md"
+                : "border border-gray-200 bg-white text-gray-700 hover:border-red-300 hover:bg-red-50"
             }`}
           >
             Expired
-            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-              activeFilter === 'expired' ? 'bg-red-500' : 'bg-red-100 text-red-700'
-            }`}>
+            <span
+              className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
+                activeFilter === "expired"
+                  ? "bg-red-500"
+                  : "bg-red-100 text-red-700"
+              }`}
+            >
               {filterCounts.expired}
             </span>
           </button>
           <button
-            onClick={() => setActiveFilter('expiring-soon')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-              activeFilter === 'expiring-soon'
-                ? 'bg-amber-600 text-white shadow-md'
-                : 'bg-white text-gray-700 border border-gray-200 hover:border-amber-300 hover:bg-amber-50'
+            onClick={() => setActiveFilter("expiring-soon")}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+              activeFilter === "expiring-soon"
+                ? "bg-amber-600 text-white shadow-md"
+                : "border border-gray-200 bg-white text-gray-700 hover:border-amber-300 hover:bg-amber-50"
             }`}
           >
             Expiring Soon
-            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-              activeFilter === 'expiring-soon' ? 'bg-amber-500' : 'bg-amber-100 text-amber-700'
-            }`}>
-              {filterCounts['expiring-soon']}
+            <span
+              className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
+                activeFilter === "expiring-soon"
+                  ? "bg-amber-500"
+                  : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {filterCounts["expiring-soon"]}
             </span>
           </button>
           <button
-            onClick={() => setActiveFilter('good')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-              activeFilter === 'good'
-                ? 'bg-green-600 text-white shadow-md'
-                : 'bg-white text-gray-700 border border-gray-200 hover:border-green-300 hover:bg-green-50'
+            onClick={() => setActiveFilter("good")}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
+              activeFilter === "good"
+                ? "bg-green-600 text-white shadow-md"
+                : "border border-gray-200 bg-white text-gray-700 hover:border-green-300 hover:bg-green-50"
             }`}
           >
             Good
-            <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${
-              activeFilter === 'good' ? 'bg-green-500' : 'bg-green-100 text-green-700'
-            }`}>
+            <span
+              className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
+                activeFilter === "good"
+                  ? "bg-green-500"
+                  : "bg-green-100 text-green-700"
+              }`}
+            >
               {filterCounts.good}
             </span>
           </button>
         </div>
 
         {/* Products Table */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
+        <div className="overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm">
           {paginatedProducts.length > 0 ? (
             <>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="border-b border-gray-100 bg-gray-50">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
                         <button
-                          onClick={() => handleSort('name')}
-                          className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                          onClick={() => handleSort("name")}
+                          className="flex items-center gap-1 transition-colors hover:text-gray-700"
                         >
-                        Product Name
-                          {sortField === 'name' ? (
-                            sortDirection === 'asc' ? (
-                              <ArrowUp className="h-3 w-3 text-indigo-600" />
-                            ) : (
-                              <ArrowDown className="h-3 w-3 text-indigo-600" />
-                            )
-                          ) : (
-                        <ArrowUpDown className="h-3 w-3" />
-                          )}
-                        </button>
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        <button
-                          onClick={() => handleSort('category')}
-                          className="flex items-center gap-1 hover:text-gray-700 transition-colors"
-                        >
-                        Category
-                          {sortField === 'category' ? (
-                            sortDirection === 'asc' ? (
-                              <ArrowUp className="h-3 w-3 text-indigo-600" />
-                            ) : (
-                              <ArrowDown className="h-3 w-3 text-indigo-600" />
-                            )
-                          ) : (
-                        <ArrowUpDown className="h-3 w-3" />
-                          )}
-                        </button>
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        <button
-                          onClick={() => handleSort('expiryDate')}
-                          className="flex items-center gap-1 hover:text-gray-700 transition-colors"
-                        >
-                        Expiry Date
-                          {sortField === 'expiryDate' ? (
-                            sortDirection === 'asc' ? (
-                              <ArrowUp className="h-3 w-3 text-indigo-600" />
-                            ) : (
-                              <ArrowDown className="h-3 w-3 text-indigo-600" />
-                            )
-                          ) : (
-                        <ArrowUpDown className="h-3 w-3" />
-                          )}
-                        </button>
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                        <button
-                          onClick={() => handleSort('quantity')}
-                          className="flex items-center gap-1 hover:text-gray-700 transition-colors"
-                        >
-                      Quantity
-                          {sortField === 'quantity' ? (
-                            sortDirection === 'asc' ? (
+                          Product Name
+                          {sortField === "name" ? (
+                            sortDirection === "asc" ? (
                               <ArrowUp className="h-3 w-3 text-indigo-600" />
                             ) : (
                               <ArrowDown className="h-3 w-3 text-indigo-600" />
@@ -653,156 +638,229 @@ export default function ProductsPage() {
                             <ArrowUpDown className="h-3 w-3" />
                           )}
                         </button>
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Batch #
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-100">
-                    {paginatedProducts.map((product) => (
-                    <tr key={product.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                        {product.name}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {product.category}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(product.expiryDate)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        {getStatusBadge(product.expiryDate)}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {product.quantity}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {product.batchNumber ?? '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        <div className="flex items-center gap-2">
-                          <button 
-                            onClick={() => handleEditProduct(product)}
-                            className="p-1 text-gray-400 hover:text-indigo-600 transition-colors"
-                            title="Edit product"
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </button>
-                          <button 
-                            onClick={() => handleDeleteClick(product)}
-                            className="p-1 text-gray-400 hover:text-red-600 transition-colors"
-                            title="Delete product"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            
-            {/* Pagination Controls */}
-            <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50">
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-700">Show</span>
-                <select
-                  value={pageSize}
-                  onChange={(e) => setPageSize(Number(e.target.value))}
-                  className="px-3 py-1.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
-                <span className="text-sm text-gray-700">
-                  of {filteredAndSortedProducts.length} results
-                </span>
-              </div>
-              
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage === 1}
-                  className="p-2 rounded-lg border border-gray-200 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title="Previous page"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: totalPages }, (_, i) => i + 1)
-                    .filter((page) => {
-                      // Show first page, last page, current page, and pages around current
-                      return (
-                        page === 1 ||
-                        page === totalPages ||
-                        (page >= currentPage - 1 && page <= currentPage + 1)
-                      );
-                    })
-                    .map((page, index, array) => {
-                      // Add ellipsis
-                      const prevPage = array[index - 1];
-                      const showEllipsis = prevPage && page - prevPage > 1;
-                      
-                      return (
-                        <div key={page} className="flex items-center gap-1">
-                          {showEllipsis && (
-                            <span className="px-2 text-gray-400">...</span>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
+                        <button
+                          onClick={() => handleSort("category")}
+                          className="flex items-center gap-1 transition-colors hover:text-gray-700"
+                        >
+                          Category
+                          {sortField === "category" ? (
+                            sortDirection === "asc" ? (
+                              <ArrowUp className="h-3 w-3 text-indigo-600" />
+                            ) : (
+                              <ArrowDown className="h-3 w-3 text-indigo-600" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-3 w-3" />
                           )}
-                          <button
-                            onClick={() => setCurrentPage(page)}
-                            className={`min-w-[2.5rem] px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                              currentPage === page
-                                ? 'bg-indigo-600 text-white'
-                                : 'hover:bg-white border border-gray-200'
-                            }`}
-                          >
-                            {page}
-                          </button>
-                        </div>
-                      );
-                    })}
-                </div>
-                
-                <button
-                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                  disabled={currentPage === totalPages}
-                  className="p-2 rounded-lg border border-gray-200 hover:bg-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  title="Next page"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
+                        </button>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
+                        <button
+                          onClick={() => handleSort("expiryDate")}
+                          className="flex items-center gap-1 transition-colors hover:text-gray-700"
+                        >
+                          Expiry Date
+                          {sortField === "expiryDate" ? (
+                            sortDirection === "asc" ? (
+                              <ArrowUp className="h-3 w-3 text-indigo-600" />
+                            ) : (
+                              <ArrowDown className="h-3 w-3 text-indigo-600" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-3 w-3" />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
+                        <button
+                          onClick={() => handleSort("status")}
+                          className="flex items-center gap-1 transition-colors hover:text-gray-700"
+                        >
+                          Status
+                          {sortField === "status" ? (
+                            sortDirection === "asc" ? (
+                              <ArrowUp className="h-3 w-3 text-indigo-600" />
+                            ) : (
+                              <ArrowDown className="h-3 w-3 text-indigo-600" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-3 w-3" />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
+                        <button
+                          onClick={() => handleSort("quantity")}
+                          className="flex items-center gap-1 transition-colors hover:text-gray-700"
+                        >
+                          Quantity
+                          {sortField === "quantity" ? (
+                            sortDirection === "asc" ? (
+                              <ArrowUp className="h-3 w-3 text-indigo-600" />
+                            ) : (
+                              <ArrowDown className="h-3 w-3 text-indigo-600" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-3 w-3" />
+                          )}
+                        </button>
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
+                        Batch #
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
+                        Actions
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white">
+                    {paginatedProducts.map((product) => (
+                      <tr
+                        key={product.id}
+                        className="border-b border-gray-50 transition-colors hover:bg-gray-50"
+                      >
+                        <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
+                          {product.name}
+                        </td>
+                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
+                          {product.category}
+                        </td>
+                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
+                          {formatDate(product.expiryDate)}
+                        </td>
+                        <td className="px-6 py-4 text-sm whitespace-nowrap">
+                          {getStatusBadge(product.expiryDate)}
+                        </td>
+                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
+                          {product.quantity}
+                        </td>
+                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
+                          {product.batchNumber ?? "-"}
+                        </td>
+                        <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleEditProduct(product)}
+                              className="p-1 text-gray-400 transition-colors hover:text-indigo-600"
+                              title="Edit product"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(product)}
+                              className="p-1 text-gray-400 transition-colors hover:text-red-600"
+                              title="Delete product"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            </div>
-          </>
+
+              {/* Pagination Controls */}
+              <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-6 py-4">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-gray-700">Show</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                  </select>
+                  <span className="text-sm text-gray-700">
+                    of {filteredAndSortedProducts.length} results
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="rounded-lg border border-gray-200 p-2 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    title="Previous page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+
+                  <div className="flex items-center gap-1">
+                    {Array.from({ length: totalPages }, (_, i) => i + 1)
+                      .filter((page) => {
+                        // Show first page, last page, current page, and pages around current
+                        return (
+                          page === 1 ||
+                          page === totalPages ||
+                          (page >= currentPage - 1 && page <= currentPage + 1)
+                        );
+                      })
+                      .map((page, index, array) => {
+                        // Add ellipsis
+                        const prevPage = array[index - 1];
+                        const showEllipsis = prevPage && page - prevPage > 1;
+
+                        return (
+                          <div key={page} className="flex items-center gap-1">
+                            {showEllipsis && (
+                              <span className="px-2 text-gray-400">...</span>
+                            )}
+                            <button
+                              onClick={() => setCurrentPage(page)}
+                              className={`min-w-[2.5rem] rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                                currentPage === page
+                                  ? "bg-indigo-600 text-white"
+                                  : "border border-gray-200 hover:bg-white"
+                              }`}
+                            >
+                              {page}
+                            </button>
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
+                    disabled={currentPage === totalPages}
+                    className="rounded-lg border border-gray-200 p-2 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                    title="Next page"
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </>
           ) : (
             /* Empty State */
-            <div className="text-center py-16 px-4">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 mb-4">
+            <div className="px-4 py-16 text-center">
+              <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100">
                 <Package className="h-8 w-8 text-indigo-600" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {searchTerm || activeFilter !== 'all' 
-                  ? 'No products found' 
-                  : 'No products yet'}
+              <h3 className="mb-2 text-lg font-semibold text-gray-900">
+                {searchTerm || activeFilter !== "all"
+                  ? "No products found"
+                  : "No products yet"}
               </h3>
-              <p className="text-gray-500 mb-6 max-w-sm mx-auto">
-                {searchTerm 
-                  ? 'Try adjusting your search or filters to find what you\'re looking for.'
-                  : activeFilter !== 'all'
-                  ? 'No products match this filter. Try selecting a different filter.'
-                  : 'Get started by adding your first product to track expiry dates.'}
+              <p className="mx-auto mb-6 max-w-sm text-gray-500">
+                {searchTerm
+                  ? "Try adjusting your search or filters to find what you're looking for."
+                  : activeFilter !== "all"
+                    ? "No products match this filter. Try selecting a different filter."
+                    : "Get started by adding your first product to track expiry dates."}
               </p>
-              {!searchTerm && activeFilter === 'all' && (
+              {!searchTerm && activeFilter === "all" && (
                 <button
                   onClick={handleAddProduct}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+                  className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition-colors hover:bg-indigo-700"
                 >
                   <Plus className="h-4 w-4" />
                   Add Your First Product
@@ -823,18 +881,18 @@ export default function ProductsPage() {
 
         {/* Delete Confirmation Modal */}
         {deleteModalOpen && productToDelete && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-              <div className="flex items-start gap-4 mb-4">
-                <div className="flex-shrink-0 w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+              <div className="mb-4 flex items-start gap-4">
+                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
                   <AlertCircle className="h-6 w-6 text-red-600" />
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-1">
+                  <h3 className="mb-1 text-lg font-semibold text-gray-900">
                     Delete Product
                   </h3>
                   <p className="text-sm text-gray-500">
-                    Are you sure you want to delete{' '}
+                    Are you sure you want to delete{" "}
                     <span className="font-medium text-gray-900">
                       {productToDelete.name}
                     </span>
@@ -842,20 +900,20 @@ export default function ProductsPage() {
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex gap-3">
                 <button
                   onClick={() => {
                     setDeleteModalOpen(false);
                     setProductToDelete(null);
                   }}
-                  className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium"
+                  className="flex-1 rounded-lg border border-gray-200 px-4 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50"
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleConfirmDelete}
-                  className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+                  className="flex-1 rounded-lg bg-red-600 px-4 py-2 font-medium text-white transition-colors hover:bg-red-700"
                 >
                   Delete
                 </button>
