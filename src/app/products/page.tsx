@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Search, Loader2, Edit2, Trash2, ArrowUpDown, ArrowUp, ArrowDown, Package, ChevronLeft, ChevronRight, AlertCircle } from 'lucide-react';
 import { useSupabaseAuth } from '~/hooks/useSupabaseAuth';
+import { supabase } from '~/lib/supabase';
 import type { Product } from '~/types';
 import { Header } from '~/components/layout/Header';
 import { ProductForm } from '~/components/products/ProductForm';
@@ -60,32 +61,12 @@ export default function ProductsPage() {
   const { toast } = useToast();
   
   // Core product data and UI state
+  const [products, setProducts] = useState<Product[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [productsLoading, setProductsLoading] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(undefined);
 
-  /**
-   * tRPC Query for Products
-   * Fetches all products from backend API
-   * - Automatically refetches on window focus
-   * - Handles loading and error states
-   * - Type-safe with full TypeScript support
-   */
-  const {
-    data: productsData,
-    isLoading: productsLoading,
-    refetch: refetchProducts,
-  } = api.products.getAll.useQuery(
-    { userId: user?.id ?? '' },
-    { enabled: !!user?.id } // Only run query when user is authenticated
-  );
-  
-  // Transform database rows to Product interface (camelCase)
-  const products: Product[] = useMemo(() => {
-    if (!productsData) return [];
-    return productsData.map((row: ProductRow) => transformProductFromDb(row));
-  }, [productsData]);
-  
   /**
    * Filter State
    * Allows users to quickly view products by status:
@@ -122,11 +103,53 @@ export default function ProductsPage() {
   
   /**
    * tRPC Mutations for CRUD Operations
-   * All data operations now go through backend API instead of direct Supabase calls
+   * All data modifications go through backend API for validation and business logic
+   * After mutations, we call loadUserProducts() to refresh the data
    */
   const createProductMutation = api.products.create.useMutation();
   const updateProductMutation = api.products.update.useMutation();
   const deleteProductMutation = api.products.delete.useMutation();
+  
+  /**
+   * Load products for the current user from Supabase
+   * Direct client-side fetch for fast data retrieval
+   * Uses RLS policies to ensure users only see their own products
+   */
+  const loadUserProducts = useCallback(async () => {
+    if (!user) return;
+    
+    setProductsLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('expiry_date', { ascending: true });
+
+      if (error) {
+        console.error('Error loading products:', error);
+        toast({
+          title: 'Error',
+          description: 'Failed to load products',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Transform database rows to Product interface
+      const transformedProducts = (data as ProductRow[]).map(transformProductFromDb);
+      setProducts(transformedProducts);
+    } catch (error) {
+      console.error('Unexpected error loading products:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load products',
+        variant: 'destructive',
+      });
+    } finally {
+      setProductsLoading(false);
+    }
+  }, [user, toast]);
 
   // Authentication check - redirect to login if not authenticated
   useEffect(() => {
@@ -134,6 +157,13 @@ export default function ProductsPage() {
       router.push('/login');
     }
   }, [isAuthenticated, loading, router]);
+
+  // Load user products from Supabase
+  useEffect(() => {
+    if (user) {
+      void loadUserProducts();
+    }
+  }, [user, loadUserProducts]);
 
   /**
    * Filter, Sort, and Paginate Products
@@ -293,10 +323,8 @@ export default function ProductsPage() {
 
   /**
    * Submit Product Handler
-   * Uses backend tRPC API for create/update operations
-   * - Server-side validation with Zod
-   * - Automatic refetch after successful mutation
-   * - Centralized error handling
+   * Uses tRPC mutations for server-side validation and business logic
+   * After mutation, refreshes data with loadUserProducts()
    */
   const handleSubmitProduct = async (productData: Omit<Product, 'id' | 'addedDate'>) => {
     if (!user) return;
@@ -345,8 +373,8 @@ export default function ProductsPage() {
         });
       }
 
-      // Refetch products and close form
-      await refetchProducts();
+      // Reload products from client-side and close form
+      await loadUserProducts();
       handleCloseForm();
     } catch (error) {
       console.error('Error saving product:', error);
@@ -360,9 +388,8 @@ export default function ProductsPage() {
 
   /**
    * Confirm Delete Handler
-   * Uses backend tRPC API for delete operation
-   * - Server-side ownership verification
-   * - Automatic refetch after successful deletion
+   * Uses tRPC mutation for server-side deletion with security checks
+   * After mutation, refreshes data with loadUserProducts()
    */
   const handleConfirmDelete = async () => {
     if (!user || !productToDelete) return;
@@ -379,8 +406,8 @@ export default function ProductsPage() {
         description: "The product has been deleted successfully.",
       });
 
-      // Refetch products
-      await refetchProducts();
+      // Reload products from client-side
+      await loadUserProducts();
       
       // Close modal
       setDeleteModalOpen(false);

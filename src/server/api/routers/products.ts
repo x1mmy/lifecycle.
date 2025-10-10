@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
-import { supabase } from "~/lib/supabase";
+import { supabaseAdmin } from "~/lib/supabase-admin";
 
 /**
  * Products Router
@@ -83,7 +83,7 @@ export const productsRouter = createTRPCRouter({
     )
     .query(async ({ input }) => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await supabaseAdmin
           .from('products')
           .select('*')
           .eq('user_id', input.userId)
@@ -126,7 +126,7 @@ export const productsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
-        const response = await supabase
+        const response = await supabaseAdmin
           .from('products')
           .insert({
             user_id: input.userId,
@@ -182,7 +182,7 @@ export const productsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
-        const response = await supabase
+        const response = await supabaseAdmin
           .from('products')
           .update({
             name: input.product.name,
@@ -244,7 +244,7 @@ export const productsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
-        const { error } = await supabase
+        const { error } = await supabaseAdmin
           .from('products')
           .delete()
           .eq('id', input.productId)

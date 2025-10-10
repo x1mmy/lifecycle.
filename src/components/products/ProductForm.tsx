@@ -49,7 +49,14 @@ export const ProductForm = ({ product, onSubmit, onClose }: ProductFormProps) =>
    * - Easier to switch barcode providers
    */
   const lookupBarcode = async (barcodeValue: string) => {
-    if (!barcodeValue.trim()) return;
+    if (!barcodeValue.trim()) {
+      toast({
+        title: "No barcode entered",
+        description: "Please enter or scan a barcode first.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     try {
       // Call server-side tRPC endpoint
@@ -77,30 +84,40 @@ export const ProductForm = ({ product, onSubmit, onClose }: ProductFormProps) =>
         // Update form if we got any data
         if (Object.keys(updates).length > 0) {
           setFormData({ ...formData, ...updates });
+          
+          // Show success toast
           toast({
-            title: "Product found!",
-            description: "Form fields have been auto-filled with barcode data.",
+            title: "✅ Product found!",
+            description: `Found "${result.data.name ?? 'product'}" - Form fields have been auto-filled.`,
           });
+          
+          // Clear barcode input
+          setBarcode('');
         } else {
+          // Product found but no new info to add
           toast({
-            title: "Product found",
-            description: "No new information to add from barcode.",
+            title: "Product already filled",
+            description: "Product found but form already has this information.",
           });
+          setBarcode('');
         }
       } else {
-        // Product not found
+        // Product not found in database
         toast({
-          title: "Product not found",
-          description: result.message || "Barcode not found in database. Please enter details manually.",
+          title: "❌ Product not found",
+          description: `Barcode "${barcodeValue.trim()}" not found in database. Please enter product details manually.`,
           variant: "destructive",
         });
+        
+        // Don't clear barcode in case user wants to try again
       }
     } catch (error) {
       // Network or server error
       console.error('Barcode lookup error:', error);
+      
       toast({
-        title: "Lookup failed",
-        description: "Could not look up barcode. Please enter details manually.",
+        title: "⚠️ Lookup failed",
+        description: "Failed to connect to barcode database. Please enter product details manually.",
         variant: "destructive",
       });
     }
