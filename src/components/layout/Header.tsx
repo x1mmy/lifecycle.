@@ -11,7 +11,7 @@ export const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
-  const { user, logout } = useSupabaseAuth();
+  const { user, logout, isAdmin } = useSupabaseAuth();
 
   const handleLogout = () => {
     void logout();
@@ -19,19 +19,34 @@ export const Header = () => {
   };
 
   const isActive = (path: string) => pathname === path;
+  
+  // Check if we're on an admin page
+  const isAdminPage = pathname?.startsWith('/admin');
 
-  const navLinks = [
-    { path: '/dashboard', label: 'Dashboard' },
-    { path: '/products', label: 'Products' },
-    { path: '/settings', label: 'Settings' },
-  ];
+  // Show different navigation based on whether we're on admin pages or regular pages
+  const navLinks = isAdminPage
+    ? [
+        // Admin navigation
+        { path: '/admin', label: 'Admin Dashboard' },
+        { path: '/admin/analytics', label: 'Analytics' },
+      ]
+    : [
+        // Regular user navigation
+        { path: '/dashboard', label: 'Dashboard' },
+        { path: '/products', label: 'Products' },
+        { path: '/settings', label: 'Settings' },
+        ...(isAdmin ? [{ path: '/admin', label: 'Admin' }] : []),
+      ];
 
   return (
     <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
       <div className="container mx-auto px-4">
         <div className="flex items-center justify-between h-16">
-          {/* Logo */}
-          <Link href="/dashboard" className="flex items-center gap-2 font-bold text-xl text-indigo-600">
+          {/* Logo - links to admin or dashboard depending on context */}
+          <Link 
+            href={isAdminPage ? '/admin' : '/dashboard'} 
+            className="flex items-center gap-2 font-bold text-xl text-indigo-600"
+          >
             <Package className="h-6 w-6" />
             <span>LifeCycle</span>
           </Link>

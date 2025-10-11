@@ -88,7 +88,7 @@ export async function middleware(req: NextRequest) {
   // Define which routes need authentication
   const protectedRoutes = ['/dashboard', '/admin', '/products', '/settings']
   
-  // Define which routes are admin-only
+  // Define which routes are admin-only (including sub-routes)
   const adminRoutes = ['/admin']
   
   // Define public routes (login/signup pages)
