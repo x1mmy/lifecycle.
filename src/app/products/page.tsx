@@ -680,6 +680,15 @@ export default function ProductsPage() {
                         >
                           Status
                           {sortField === "status" ? (
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
+                        <button
+                          onClick={() => handleSort("quantity")}
+                          className="flex items-center gap-1 transition-colors hover:text-gray-700"
+                        >
+                          Quantity
+                          {sortField === "quantity" ? (
                             sortDirection === "asc" ? (
                               <ArrowUp className="h-3 w-3 text-indigo-600" />
                             ) : (
@@ -715,11 +724,19 @@ export default function ProductsPage() {
                       </th>
                     </tr>
                   </thead>
+
                   <tbody className="bg-white">
                     {paginatedProducts.map((product) => (
                       <tr
                         key={product.id}
                         className="border-b border-gray-50 transition-colors hover:bg-gray-50"
+
+                  <tbody className="divide-y divide-gray-100 bg-white">
+                    {paginatedProducts.map((product) => (
+                      <tr
+                        key={product.id}
+                        className="transition-colors hover:bg-gray-50"
+
                       >
                         <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
                           {product.name}
@@ -871,9 +888,10 @@ export default function ProductsPage() {
         </div>
 
         {/* Product Form Modal */}
-        {isFormOpen && (
+        {isFormOpen && user && (
           <ProductForm
             product={selectedProduct}
+            userId={user.id}
             onSubmit={handleSubmitProduct}
             onClose={handleCloseForm}
           />
