@@ -65,7 +65,7 @@ const transformProductFromDb = (row: ProductRow): Product => ({
 
 // Type definitions for product filtering, sorting, and pagination
 type FilterType = "all" | "expired" | "expiring-soon" | "good";
-type SortField = "name" | "category" | "expiryDate" | "quantity";
+type SortField = "name" | "category" | "expiryDate" | "status" | "quantity";
 type SortDirection = "asc" | "desc";
 
 export default function ProductsPage() {
@@ -237,6 +237,11 @@ export default function ProductsPage() {
           bVal = b.category.toLowerCase();
           break;
         case "expiryDate":
+          aVal = new Date(a.expiryDate).getTime();
+          bVal = new Date(b.expiryDate).getTime();
+          break;
+        case "status":
+          // Sort by expiry date priority (products expiring first)
           aVal = new Date(a.expiryDate).getTime();
           bVal = new Date(b.expiryDate).getTime();
           break;
@@ -669,7 +674,30 @@ export default function ProductsPage() {
                         </button>
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
+                        <button
+                          onClick={() => handleSort("status")}
+                          className="flex items-center gap-1 transition-colors hover:text-gray-700"
+                        >
+                          Status
+                          {sortField === "status" ? (
                         Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
+                        <button
+                          onClick={() => handleSort("quantity")}
+                          className="flex items-center gap-1 transition-colors hover:text-gray-700"
+                        >
+                          Quantity
+                          {sortField === "quantity" ? (
+                            sortDirection === "asc" ? (
+                              <ArrowUp className="h-3 w-3 text-indigo-600" />
+                            ) : (
+                              <ArrowDown className="h-3 w-3 text-indigo-600" />
+                            )
+                          ) : (
+                            <ArrowUpDown className="h-3 w-3" />
+                          )}
+                        </button>
                       </th>
                       <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
                         <button
@@ -696,11 +724,19 @@ export default function ProductsPage() {
                       </th>
                     </tr>
                   </thead>
+
+                  <tbody className="bg-white">
+                    {paginatedProducts.map((product) => (
+                      <tr
+                        key={product.id}
+                        className="border-b border-gray-50 transition-colors hover:bg-gray-50"
+
                   <tbody className="divide-y divide-gray-100 bg-white">
                     {paginatedProducts.map((product) => (
                       <tr
                         key={product.id}
                         className="transition-colors hover:bg-gray-50"
+
                       >
                         <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
                           {product.name}
