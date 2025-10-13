@@ -16,7 +16,7 @@ import { Header } from '~/components/layout/Header';
  * - Data visualizations
  */
 export default function AdminAnalyticsPage() {
-  const { isAdmin, loading: authLoading, isAuthenticated } = useSupabaseAuth();
+  const { loading: authLoading, isAuthenticated } = useSupabaseAuth();
   const router = useRouter();
 
   // Check authentication

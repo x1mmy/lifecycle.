@@ -6,9 +6,6 @@ import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Package } from 'lucide-react';
 import { useSupabaseAuth } from '~/hooks/useSupabaseAuth';
 import { validateEmail, validatePassword, validateRequired } from '~/utils/validation';
-import { Button } from '~/components/ui/button';
-import { Input } from '~/components/ui/input';
-import { Label } from '~/components/ui/label';
 import { useToast } from '~/hooks/use-toast';
 
 export const SignUpForm = () => {

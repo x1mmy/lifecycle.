@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { type User, type Session } from '@supabase/supabase-js';
 import { supabase } from '~/lib/supabase';
-import { useToast } from './use-toast';
 
 /**
  * Custom hook for Supabase authentication
@@ -13,7 +12,6 @@ export const useSupabaseAuth = () => {
   const [session, setSession] = useState<Session | null>(null);   // Auth session data
   const [loading, setLoading] = useState(true);                  // Loading state for auth checks
   const [isAdmin, setIsAdmin] = useState(false);                 // Whether user has admin role
-  const { toast } = useToast();
 
   useEffect(() => {
     // Listen for auth state changes (login/logout/session refresh)
