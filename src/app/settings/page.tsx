@@ -9,6 +9,7 @@ import { api } from '~/trpc/react';
 import { supabase } from '~/lib/supabase';
 import { useToast } from '~/hooks/use-toast';
 import { Toaster } from '~/components/ui/toaster';
+import { validateRequired, validateEmail } from '~/utils/validation';
 
 export default function SettingsPage() {
   const { user, loading, isAuthenticated } = useSupabaseAuth();
@@ -40,6 +41,8 @@ export default function SettingsPage() {
     weeklyReport: false,
     alertDays: 7,
   });
+
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   // tRPC hooks for data fetching and mutations
   const { data: profile, isLoading: profileLoading } = api.settings?.getProfile.useQuery(
@@ -134,6 +137,34 @@ export default function SettingsPage() {
   const handleProfileUpdate = () => {
     if (!user?.id) return;
     
+    // Clear previous errors
+    setErrors({});
+    
+    // Validate required fields
+    const newErrors: Record<string, string> = {};
+    
+    if (!validateRequired(profileData.businessName)) {
+      newErrors.businessName = 'Business name is required';
+    }
+    
+    if (!validateRequired(profileData.email)) {
+      newErrors.email = 'Email address is required';
+    } else if (!validateEmail(profileData.email)) {
+      newErrors.email = 'Please enter a valid email address';
+    }
+    
+    // If there are validation errors, show them and don't submit
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      toast({
+        title: 'Validation Error',
+        description: 'Please fix the errors below before saving.',
+        variant: 'destructive',
+        action: <XCircle className="h-5 w-5 text-red-600" />,
+      });
+      return;
+    }
+    
     updateProfileMutation.mutate({
       userId: user.id,
       profile: {
@@ -195,25 +226,55 @@ export default function SettingsPage() {
            
             <div className="space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">Business Name</label>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Business Name <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="text"
                   value={profileData.businessName}
-                  onChange={(e) => setProfileData({ ...profileData, businessName: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white"
-                  placeholder="testing123"
+                  onChange={(e) => {
+                    setProfileData({ ...profileData, businessName: e.target.value });
+                    // Clear error when user starts typing
+                    if (errors.businessName) {
+                      setErrors({ ...errors, businessName: '' });
+                    }
+                  }}
+                  className={`w-full px-4 py-2 border rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white ${
+                    errors.businessName 
+                      ? 'border-red-300 bg-red-50' 
+                      : 'border-gray-200 bg-gray-50'
+                  }`}
+                  placeholder="Enter your business name"
                 />
+                {errors.businessName && (
+                  <p className="mt-1 text-sm text-red-600">{errors.businessName}</p>
+                )}
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">Email Address</label>
+                <label className="block text-sm font-medium text-gray-900 mb-2">
+                  Email Address <span className="text-red-500">*</span>
+                </label>
                 <input
                   type="email"
                   value={profileData.email}
-                  onChange={(e) => setProfileData({ ...profileData, email: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white"
-                  placeholder="zimraan2012@gmail.com"
+                  onChange={(e) => {
+                    setProfileData({ ...profileData, email: e.target.value });
+                    // Clear error when user starts typing
+                    if (errors.email) {
+                      setErrors({ ...errors, email: '' });
+                    }
+                  }}
+                  className={`w-full px-4 py-2 border rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white ${
+                    errors.email 
+                      ? 'border-red-300 bg-red-50' 
+                      : 'border-gray-200 bg-gray-50'
+                  }`}
+                  placeholder="Enter your email address"
                 />
+                {errors.email && (
+                  <p className="mt-1 text-sm text-red-600">{errors.email}</p>
+                )}
               </div>
 
               <div>
