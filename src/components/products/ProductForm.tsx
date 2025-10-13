@@ -311,14 +311,14 @@ export const ProductForm = ({
 
                     {/* Loading state */}
                     {categoriesLoading && (
-                      <SelectItem value="" disabled>
+                      <SelectItem value="__loading__" disabled>
                         Loading categories...
                       </SelectItem>
                     )}
 
                     {/* Error state */}
                     {categoriesError && (
-                      <SelectItem value="" disabled>
+                      <SelectItem value="__error__" disabled>
                         Error loading categories
                       </SelectItem>
                     )}
