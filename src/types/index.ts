@@ -64,25 +64,9 @@ export interface AdminUserProduct {
     status: ExpiryStatus;
 }
 
-export interface SystemAlert {
-    id: string;
-    type: 'high_expired_rate' | 'inactive_user' | 'zero_inventory';
-    user_id: string;
-    user_name: string;
-    user_email: string;
-    severity: 'warning' | 'critical';
-    message: string;
-    details?: {
-        total_products?: number;
-        expired_products?: number;
-        expired_rate?: number;
-        days_inactive?: number;
-    };
-}
 
 export interface AdminStats {
     totalUsers: number;
     totalProducts: number;
     usersWithActiveProducts: number;
-    totalAlerts: number;
 }

@@ -375,12 +375,13 @@ export const productsRouter = createTRPCRouter({
         }
 
         // Extract unique categories, filter out invalid ones, and sort them
+        const categories = data as Array<{ category: string }>;
         const uniqueCategories = Array.from(
-          new Set(data.map((product) => product.category)),
+          new Set(categories.map((product) => product.category)),
         )
           .filter(
-            (category) =>
-              category && category.trim() !== "" && category !== "-",
+            (category): category is string =>
+              typeof category === 'string' && category.trim() !== "" && category !== "-",
           )
           .sort();
 

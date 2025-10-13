@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Users, Package, Activity, AlertTriangle, Eye, CheckCircle, XCircle } from 'lucide-react';
+import { Loader2, Users, Package, Activity, Eye, CheckCircle, XCircle } from 'lucide-react';
 import { api } from '~/trpc/react';
 import { useSupabaseAuth } from '~/hooks/useSupabaseAuth';
 import { formatDate } from '~/utils/dateUtils';
@@ -26,7 +26,7 @@ import {
 } from '~/components/ui/dialog';
 import { useToast } from '~/hooks/use-toast';
 import { Header } from '~/components/layout/Header';
-import type { AdminUserWithStats, SystemAlert } from '~/types';
+import type { AdminUserWithStats } from '~/types';
 
 /**
  * Admin Dashboard Page - Protected Route for Admin Users Only
@@ -43,7 +43,6 @@ export default function AdminDashboardPage() {
   const { toast } = useToast();
   
   const [selectedUser, setSelectedUser] = useState<AdminUserWithStats | null>(null);
-  const [showAlertsSection, setShowAlertsSection] = useState(false);
 
   // tRPC queries
   const { data: stats, isLoading: statsLoading } = api.admin.getAdminStats.useQuery(undefined, {
@@ -54,9 +53,6 @@ export default function AdminDashboardPage() {
     enabled: isAdmin,
   });
   
-  const { data: alerts } = api.admin.getSystemAlerts.useQuery(undefined, {
-    enabled: isAdmin,
-  });
 
   const { data: userProducts, isLoading: productsLoading } = api.admin.getUserProducts.useQuery(
     { userId: selectedUser?.id ?? '' },
@@ -116,31 +112,6 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const getAlertColor = (alert: SystemAlert) => {
-    switch (alert.type) {
-      case 'high_expired_rate':
-        return 'bg-red-50 border-red-200';
-      case 'inactive_user':
-        return 'bg-yellow-50 border-yellow-200';
-      case 'zero_inventory':
-        return 'bg-blue-50 border-blue-200';
-      default:
-        return 'bg-gray-50 border-gray-200';
-    }
-  };
-
-  const getAlertIcon = (alert: SystemAlert) => {
-    switch (alert.type) {
-      case 'high_expired_rate':
-        return <AlertTriangle className="h-5 w-5 text-red-600" />;
-      case 'inactive_user':
-        return <Users className="h-5 w-5 text-yellow-600" />;
-      case 'zero_inventory':
-        return <Package className="h-5 w-5 text-blue-600" />;
-      default:
-        return <AlertTriangle className="h-5 w-5 text-gray-600" />;
-    }
-  };
 
   const getExpiryBadgeVariant = (status: string) => {
     switch (status) {
@@ -165,7 +136,7 @@ export default function AdminDashboardPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           {/* Total Users */}
           <div className="bg-card p-6 rounded-xl shadow">
             <div className="flex items-center justify-between">
@@ -205,56 +176,8 @@ export default function AdminDashboardPage() {
             </div>
           </div>
 
-          {/* System Alerts */}
-          <div 
-            className="bg-card p-6 rounded-xl shadow cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => setShowAlertsSection(!showAlertsSection)}
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-muted-foreground mb-1">System Alerts</p>
-                <p className="text-3xl font-bold text-foreground">{stats?.totalAlerts ?? 0}</p>
-              </div>
-              <div className="w-12 h-12 bg-red-500/10 rounded-lg flex items-center justify-center">
-                <AlertTriangle className="h-6 w-6 text-red-600" />
-              </div>
-            </div>
-          </div>
         </div>
 
-        {/* System Alerts Section */}
-        {showAlertsSection && alerts && alerts.length > 0 && (
-          <div className="mb-8">
-            <div className="bg-card p-6 rounded-xl shadow">
-              <h2 className="text-xl font-semibold text-foreground mb-4">System Alerts</h2>
-              <div className="space-y-3">
-                {alerts.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className={`p-4 rounded-lg border ${getAlertColor(alert)} flex items-start gap-3`}
-                  >
-                    {getAlertIcon(alert)}
-                    <div className="flex-1">
-                      <p className="font-medium text-foreground">{alert.message}</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {alert.user_email}
-                        {alert.details?.expired_rate && 
-                          ` • ${alert.details.expired_products} of ${alert.details.total_products} expired`
-                        }
-                        {alert.details?.days_inactive && 
-                          ` • ${alert.details.days_inactive} days inactive`
-                        }
-                      </p>
-                    </div>
-                    <Badge variant={alert.severity === 'critical' ? 'destructive' : 'warning'}>
-                      {alert.severity}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Users Table */}
         <div className="bg-card p-6 rounded-xl shadow">

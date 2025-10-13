@@ -96,14 +96,17 @@ export const settingsRouter = createTRPCRouter({
         userId: z.string().uuid("Invalid user ID"),
       }),
     )
-    .query(async ({ input }: { input: { userId: string } }) => {
+    .query(async ({ input }) => {
       try {
         // Query the profiles table for the specific user
-        const { data, error } = await supabaseAdmin
+        const result = await supabaseAdmin
           .from("profiles")
           .select("*")
           .eq("id", input.userId)
           .single(); // .single() expects exactly one row
+        
+        const data = result.data;
+        const error = result.error;
 
         if (error) {
           console.error("[Settings getProfile Error]", error);
@@ -148,10 +151,10 @@ export const settingsRouter = createTRPCRouter({
         profile: profileUpdateSchema,
       }),
     )
-    .mutation(async ({ input }: { input: { userId: string; profile: z.infer<typeof profileUpdateSchema> } }) => {
+    .mutation(async ({ input }) => {
       try {
         // Step 1: Update the profile in the database
-        const { data, error } = await supabaseAdmin
+        const result = await supabaseAdmin
           .from("profiles")
           .update({
             business_name: input.profile.businessName,
@@ -161,6 +164,9 @@ export const settingsRouter = createTRPCRouter({
           .eq("id", input.userId) // WHERE clause to target specific user
           .select() // Return the updated data
           .single();
+        
+        const data = result.data;
+        const error = result.error;
 
         if (error) {
           console.error("[Settings updateProfile Error]", error);
@@ -226,13 +232,16 @@ export const settingsRouter = createTRPCRouter({
         userId: z.string().uuid("Invalid user ID"),
       }),
     )
-    .query(async ({ input }: { input: { userId: string } }) => {
+    .query(async ({ input }) => {
       try {
-        const { data, error } = await supabaseAdmin
+        const result = await supabaseAdmin
           .from("settings")
           .select("*")
           .eq("user_id", input.userId)
           .single();
+        
+        const data = result.data;
+        const error = result.error;
 
         if (error) {
           console.error("[Settings getNotificationPreferences Error]", error);
@@ -275,9 +284,9 @@ export const settingsRouter = createTRPCRouter({
         preferences: notificationPreferencesSchema,
       }),
     )
-    .mutation(async ({ input }: { input: { userId: string; preferences: z.infer<typeof notificationPreferencesSchema> } }) => {
+    .mutation(async ({ input }) => {
       try {
-        const { data, error } = await supabaseAdmin
+        const result = await supabaseAdmin
           .from("settings")
           .update({
             email_alerts: input.preferences.emailAlerts,
@@ -288,6 +297,9 @@ export const settingsRouter = createTRPCRouter({
           .eq("user_id", input.userId)
           .select()
           .single();
+        
+        const data = result.data;
+        const error = result.error;
 
         if (error) {
           console.error("[Settings updateNotificationPreferences Error]", error);
@@ -332,7 +344,7 @@ export const settingsRouter = createTRPCRouter({
    */
   requestPasswordReset: publicProcedure
     .input(passwordResetSchema)
-    .mutation(async ({ input }: { input: { email: string } }) => {
+    .mutation(async ({ input }) => {
       try {
         // Use Supabase Auth API to send password reset email
         const { error } = await supabaseAdmin.auth.resetPasswordForEmail(
