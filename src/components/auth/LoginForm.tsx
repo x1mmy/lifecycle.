@@ -8,7 +8,6 @@ import { useSupabaseAuth } from '~/hooks/useSupabaseAuth';
 import { validateEmail } from '~/utils/validation';
 import { useToast } from '~/hooks/use-toast';
 import { supabase } from '~/lib/supabase';
-import { withBasePath } from '~/lib/basePath';
 
 export const LoginForm = () => {
   const [email, setEmail] = useState('');
@@ -59,7 +58,6 @@ export const LoginForm = () => {
         // Decide destination (respect redirectTo query param)
         const redirectTo = searchParams.get('redirectTo');
         const destination = redirectTo ?? (result.isAdmin ? '/admin' : '/dashboard');
-        const fullUrl = withBasePath(destination);
 
         // Show success toast
         toast({ title: 'Welcome back!', description: 'You have successfully logged in.' });
@@ -68,7 +66,7 @@ export const LoginForm = () => {
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
           if (event === 'SIGNED_IN') {
             subscription.unsubscribe();
-            window.location.replace(fullUrl);
+            window.location.replace(destination);
           }
         });
 
@@ -76,7 +74,7 @@ export const LoginForm = () => {
         const { data: s } = await supabase.auth.getSession();
         if (s.session) {
           subscription.unsubscribe();
-          window.location.replace(fullUrl);
+          window.location.replace(destination);
         }
       } else {
         // Show error message from server

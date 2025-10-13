@@ -1,7 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
-import { withBasePath, stripBasePath } from '~/lib/basePath';
 
 /**
  * Next.js Middleware for Authentication and Route Protection
@@ -79,11 +78,8 @@ export async function middleware(req: NextRequest) {
   } = await supabase.auth.getUser()
 
 
-  // Use `stripBasePath` to remove the configured basePath from the
-  // incoming pathname so we can perform route matching against clean
-  // app-relative paths (e.g. '/login', '/dashboard'). This mirrors
-  // how links/components inside the app typically refer to routes.
-  const cleanPathname = stripBasePath(req.nextUrl.pathname);
+  // Get the current pathname for route matching
+  const cleanPathname = req.nextUrl.pathname;
 
   // Define which routes need authentication
   const protectedRoutes = ['/dashboard', '/admin', '/products', '/settings']
@@ -102,9 +98,8 @@ export async function middleware(req: NextRequest) {
   // RULE 1: Block unauthenticated users from protected routes.
   // Use `!user` instead of `!session` to avoid timing issues.
   if (isProtectedRoute && !user) {
-    // Build redirect targets with `withBasePath` so the browser URL
-    // includes the sub-path (e.g. '/app/login').
-    const url = new URL(withBasePath('/login'), req.url);
+    // Redirect to login page with the original path as redirectTo parameter
+    const url = new URL('/login', req.url);
     url.searchParams.set('redirectTo', cleanPathname);
     return NextResponse.redirect(url);
   }
@@ -121,9 +116,7 @@ export async function middleware(req: NextRequest) {
     
     // Send admin to admin page, regular users to dashboard
     const isAdmin = !!roleData
-    // Always use `withBasePath` when sending users to browser-visible
-    // routes so the prefix is included.
-    const to = isAdmin ? withBasePath('/admin') : withBasePath('/dashboard')
+    const to = isAdmin ? '/admin' : '/dashboard'
     return NextResponse.redirect(new URL(to, req.url))
   }
 
@@ -141,18 +134,16 @@ export async function middleware(req: NextRequest) {
     // If user is not admin, send them to regular dashboard
     if (!isAdmin) {
       // Non-admins trying to access /admin are sent to /dashboard
-      // with the proper basePath added.
-      return NextResponse.redirect(new URL(withBasePath('/dashboard'), req.url))
+      return NextResponse.redirect(new URL('/dashboard', req.url))
     }
   }
 
   // RULE 4: Handle post-login redirects (when user had a saved destination)
   if (cleanPathname === '/login' && user) {
-    // After a successful login, if a redirectTo was provided, send the
-    // user there with basePath included.
+    // After a successful login, if a redirectTo was provided, send the user there
     const redirectTo = req.nextUrl.searchParams.get('redirectTo')
     if (redirectTo) {
-      return NextResponse.redirect(new URL(withBasePath(redirectTo), req.url))
+      return NextResponse.redirect(new URL(redirectTo, req.url))
     }
   }
 

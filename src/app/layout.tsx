@@ -9,7 +9,7 @@ import { Toaster } from "~/components/ui/toaster";
 export const metadata: Metadata = {
   title: "LifeCycle - Inventory Management",
   description: "Track product expiration dates and manage inventory efficiently",
-  icons: [{ rel: "icon", url: "/app/package.png" }],
+    icons: [{ rel: "icon", url: "/package.png" }],
 };
 
 const geist = Geist({
