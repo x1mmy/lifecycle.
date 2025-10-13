@@ -871,9 +871,10 @@ export default function ProductsPage() {
         </div>
 
         {/* Product Form Modal */}
-        {isFormOpen && (
+        {isFormOpen && user && (
           <ProductForm
             product={selectedProduct}
+            userId={user.id}
             onSubmit={handleSubmitProduct}
             onClose={handleCloseForm}
           />

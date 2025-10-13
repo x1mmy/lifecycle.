@@ -83,7 +83,7 @@ export const SignUpForm = () => {
       // Show success message and redirect to login
       toast({
         title: 'Account created!',
-        description: 'Welcome to LifeCycle. You can now log in.',
+        description: 'Welcome to LifeCycle. Please check your email to complete your registration.',
       });
       router.push('/login');
     } else {
