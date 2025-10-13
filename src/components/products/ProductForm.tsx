@@ -7,12 +7,12 @@ import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
 import { Textarea } from "~/components/ui/textarea";
 import {
-  DropdownMenuSelect,
-  DropdownMenuSelectContent,
-  DropdownMenuSelectItem,
-  DropdownMenuSelectTrigger,
-  DropdownMenuSelectValue,
-} from "~/components/ui/dropdown-menu-select";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { useToast } from "~/hooks/use-toast";
 import { api } from "~/trpc/react";
 
@@ -49,10 +49,18 @@ export const ProductForm = ({
   const barcodeLookup = api.products.lookupBarcode.useMutation();
 
   // Get existing categories for dropdown
-  const { data: categories = [] } = api.products.getCategories.useQuery(
+  const { data: categories = [], isLoading: categoriesLoading, error: categoriesError } = api.products.getCategories.useQuery(
     { userId },
     { enabled: !!userId },
   );
+
+  // Debug logging
+  console.log('ProductForm Debug:', {
+    userId,
+    categories,
+    categoriesLoading,
+    categoriesError
+  });
 
   const handleChange = (field: string, value: string | number) => {
     if (field === "category" && value === "__new__") {
@@ -280,41 +288,55 @@ export const ProductForm = ({
                   </Button>
                 </div>
               ) : (
-                <DropdownMenuSelect
+                <Select
                   value={formData.category}
                   onValueChange={(value) => handleChange("category", value)}
                 >
-                  <DropdownMenuSelectTrigger
+                  <SelectTrigger
                     className={errors.category ? "border-destructive" : ""}
                   >
-                    <DropdownMenuSelectValue placeholder="Select a category..." />
-                  </DropdownMenuSelectTrigger>
-                  <DropdownMenuSelectContent>
+                    <SelectValue placeholder="Select a category..." />
+                  </SelectTrigger>
+                  <SelectContent>
                     {/* Add new category option at the top */}
-                    <DropdownMenuSelectItem
+                    <SelectItem
                       value="__new__"
                       className="font-medium text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
                     >
                       + Add new category
-                    </DropdownMenuSelectItem>
+                    </SelectItem>
 
                     {/* Separator */}
                     <div className="mx-2 my-1 h-px bg-gray-200" />
 
+                    {/* Loading state */}
+                    {categoriesLoading && (
+                      <SelectItem value="" disabled>
+                        Loading categories...
+                      </SelectItem>
+                    )}
+
+                    {/* Error state */}
+                    {categoriesError && (
+                      <SelectItem value="" disabled>
+                        Error loading categories
+                      </SelectItem>
+                    )}
+
                     {/* Existing categories */}
-                    {categories
-                      .filter((category) => category && category.trim() !== "") // Filter out empty/invalid categories
-                      .map((category) => (
-                        <DropdownMenuSelectItem
+                    {!categoriesLoading && !categoriesError && categories
+                      .filter((category: string) => category && category.trim() !== "") // Filter out empty/invalid categories
+                      .map((category: string) => (
+                        <SelectItem
                           key={category}
                           value={category}
                           className="hover:bg-gray-50"
                         >
                           {category}
-                        </DropdownMenuSelectItem>
+                        </SelectItem>
                       ))}
-                  </DropdownMenuSelectContent>
-                </DropdownMenuSelect>
+                  </SelectContent>
+                </Select>
               )}
               {errors.category && (
                 <p className="text-destructive mt-1 text-sm">

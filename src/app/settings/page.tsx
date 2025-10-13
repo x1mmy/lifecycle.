@@ -2,13 +2,18 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Loader2, ChevronDown } from 'lucide-react';
+import { Loader2, ChevronDown, CheckCircle, XCircle } from 'lucide-react';
 import { useSupabaseAuth } from '~/hooks/useSupabaseAuth';
 import { Header } from '~/components/layout/Header';
+import { api } from '~/trpc/react';
+import { supabase } from '~/lib/supabase';
+import { useToast } from '~/hooks/use-toast';
+import { Toaster } from '~/components/ui/toaster';
 
 export default function SettingsPage() {
   const { user, loading, isAuthenticated } = useSupabaseAuth();
   const router = useRouter();
+  const { toast } = useToast();
 
   const [profileData, setProfileData] = useState({
     businessName: '',
@@ -17,17 +22,17 @@ export default function SettingsPage() {
     address: '',
   });
   
-  const [passwordData, setPasswordData] = useState({
-    current: '',
-    new: '',
-    confirm: '',
-  });
+  // const [passwordData, setPasswordData] = useState({
+  //   current: '',
+  //   new: '',
+  //   confirm: '',
+  // });
   
-  const [showPasswords, setShowPasswords] = useState({
-    current: false,
-    new: false,
-    confirm: false,
-  });
+  // const [showPasswords, setShowPasswords] = useState({
+  //   current: false,
+  //   new: false,
+  //   confirm: false,
+  // });
 
   const [notifications, setNotifications] = useState({
     emailAlerts: true,
@@ -36,6 +41,65 @@ export default function SettingsPage() {
     alertDays: 7,
   });
 
+  // tRPC hooks for data fetching and mutations
+  const { data: profile, isLoading: profileLoading } = api.settings?.getProfile.useQuery(
+    { userId: user?.id ?? '' },
+    { enabled: !!user?.id }
+  ) ?? { data: undefined, isLoading: false };
+
+  const { data: notificationPrefs, isLoading: notificationLoading } = api.settings?.getNotificationPreferences.useQuery(
+    { userId: user?.id ?? '' },
+    { enabled: !!user?.id }
+  ) ?? { data: undefined, isLoading: false };
+
+  const updateProfileMutation = api.settings?.updateProfile.useMutation({
+    onSuccess: async () => {
+      toast({
+        title: 'Profile updated successfully!',
+        description: 'The profile has been updated successfully.',
+        variant: 'success',
+        action: <CheckCircle className="h-5 w-5 text-green-600" />,
+      });
+      // Refresh the user session to update the header with new business name
+      try {
+        await supabase.auth.refreshSession();
+      } catch (error) {
+        console.error('Failed to refresh session:', error);
+        // Fallback to page reload if session refresh fails
+        window.location.reload();
+      }
+    },
+    onError: (error) => {
+      console.error('Failed to update profile:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update profile. Please try again.',
+        variant: 'destructive',
+        action: <XCircle className="h-5 w-5 text-red-600" />,
+      });
+    },
+  }) ?? { mutate: () => void 0, isPending: false };
+
+  const updateNotificationsMutation = api.settings?.updateNotificationPreferences.useMutation({
+    onSuccess: () => {
+      toast({
+        title: 'Success',
+        description: 'Notification preferences updated successfully',
+        variant: 'success',
+        action: <CheckCircle className="h-5 w-5 text-green-600" />,
+      });
+    },
+    onError: (error) => {
+      console.error('Failed to update notifications:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update notification preferences. Please try again.',
+        variant: 'destructive',
+        action: <XCircle className="h-5 w-5 text-red-600" />,
+      });
+    },
+  }) ?? { mutate: () => void 0, isPending: false };
+
   // Authentication check - redirect to login if not authenticated
   useEffect(() => {
     if (!loading && !isAuthenticated) {
@@ -43,21 +107,60 @@ export default function SettingsPage() {
     }
   }, [isAuthenticated, loading, router]);
 
-  // Load user data
+  // Load user data from tRPC queries
   useEffect(() => {
-    if (user) {
-      const metadata = user.user_metadata as { business_name?: string; phone?: string; address?: string } | undefined;
+    if (profile) {
       setProfileData({
-        businessName: metadata?.business_name ?? '',
-        email: user.email ?? '',
-        phone: metadata?.phone ?? '',
-        address: metadata?.address ?? '',
+        businessName: profile.business_name ?? '',
+        email: profile.email ?? '',
+        phone: profile.phone ?? '',
+        address: profile.address ?? '',
       });
     }
-  }, [user]);
+  }, [profile]);
 
-  // Show loading spinner while checking authentication
-  if (loading) {
+  useEffect(() => {
+    if (notificationPrefs) {
+      setNotifications({
+        emailAlerts: notificationPrefs.email_alerts ?? true,
+        dailySummary: notificationPrefs.daily_summary ?? false,
+        weeklyReport: notificationPrefs.weekly_report ?? false,
+        alertDays: notificationPrefs.alert_threshold ?? 7,
+      });
+    }
+  }, [notificationPrefs]);
+
+  // Handler functions
+  const handleProfileUpdate = () => {
+    if (!user?.id) return;
+    
+    updateProfileMutation.mutate({
+      userId: user.id,
+      profile: {
+        businessName: profileData.businessName,
+        phone: profileData.phone,
+        address: profileData.address,
+      },
+    });
+  };
+
+  const handleNotificationUpdate = () => {
+    if (!user?.id) return;
+    
+    updateNotificationsMutation.mutate({
+      userId: user.id,
+      preferences: {
+        emailAlerts: notifications.emailAlerts,
+        alertThreshold: notifications.alertDays,
+        dailySummary: notifications.dailySummary,
+        weeklyReport: notifications.weeklyReport,
+      },
+    });
+  };
+
+
+  // Show loading spinner while checking authentication or loading data
+  if (loading || profileLoading || notificationLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -135,8 +238,19 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <button className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">
-                Save Changes
+              <button 
+                onClick={handleProfileUpdate}
+                disabled={updateProfileMutation.isPending}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updateProfileMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
               </button>
             </div>
           </div>
@@ -155,7 +269,12 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setNotifications({ ...notifications, emailAlerts: !notifications.emailAlerts })}
+                  onClick={() => {
+                    const newValue = !notifications.emailAlerts;
+                    setNotifications({ ...notifications, emailAlerts: newValue });
+                    // Auto-save notification preferences
+                    setTimeout(() => handleNotificationUpdate(), 100);
+                  }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     notifications.emailAlerts ? 'bg-indigo-600' : 'bg-gray-200'
                   }`}
@@ -176,7 +295,12 @@ export default function SettingsPage() {
                 <div className="relative">
                   <select
                     value={notifications.alertDays}
-                    onChange={(e) => setNotifications({ ...notifications, alertDays: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const newValue = Number(e.target.value);
+                      setNotifications({ ...notifications, alertDays: newValue });
+                      // Auto-save notification preferences
+                      setTimeout(() => handleNotificationUpdate(), 100);
+                    }}
                     className="w-full px-4 py-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-900 appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white"
                   >
                     <option value={3}>3 days</option>
@@ -197,7 +321,12 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setNotifications({ ...notifications, dailySummary: !notifications.dailySummary })}
+                  onClick={() => {
+                    const newValue = !notifications.dailySummary;
+                    setNotifications({ ...notifications, dailySummary: newValue });
+                    // Auto-save notification preferences
+                    setTimeout(() => handleNotificationUpdate(), 100);
+                  }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     notifications.dailySummary ? 'bg-indigo-600' : 'bg-gray-200'
                   }`}
@@ -219,7 +348,12 @@ export default function SettingsPage() {
                   </p>
                 </div>
                 <button
-                  onClick={() => setNotifications({ ...notifications, weeklyReport: !notifications.weeklyReport })}
+                  onClick={() => {
+                    const newValue = !notifications.weeklyReport;
+                    setNotifications({ ...notifications, weeklyReport: newValue });
+                    // Auto-save notification preferences
+                    setTimeout(() => handleNotificationUpdate(), 100);
+                  }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     notifications.weeklyReport ? 'bg-indigo-600' : 'bg-gray-200'
                   }`}
@@ -235,7 +369,7 @@ export default function SettingsPage() {
           </div>
 
           {/* Change Password */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
+          {/* <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-6">Change Password</h2>
            
             <div className="space-y-5">
@@ -299,13 +433,29 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <button className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">
-                Update Password
+              <button 
+                onClick={handlePasswordReset}
+                disabled={requestPasswordResetMutation.isPending}
+                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {requestPasswordResetMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                    Sending...
+                  </>
+                ) : (
+                  'Update Password'
+                )}
               </button>
+              
+              <p className="text-sm text-gray-500 mt-2">
+                We&apos;ll send you an email with instructions to reset your password.
+              </p>
             </div>
-          </div>
+          </div> */}
         </div>
       </main>
+      <Toaster />
     </div>
   );
 }
