@@ -116,6 +116,38 @@ export default function ProductsPage() {
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
+  // Mobile Sort Picker State
+  const [sortPickerOpen, setSortPickerOpen] = useState(false);
+
+  // Sort options for mobile picker
+  const sortOptions = [
+    { value: "expiryDate-asc", label: "Expiry Date (Soonest)" },
+    { value: "expiryDate-desc", label: "Expiry Date (Latest)" },
+    { value: "name-asc", label: "Name (A-Z)" },
+    { value: "name-desc", label: "Name (Z-A)" },
+    { value: "category-asc", label: "Category (A-Z)" },
+    { value: "category-desc", label: "Category (Z-A)" },
+    { value: "quantity-asc", label: "Quantity (Low-High)" },
+    { value: "quantity-desc", label: "Quantity (High-Low)" },
+  ];
+
+  // Handle sort selection from mobile picker
+  const handleSortSelection = (value: string) => {
+    const [field, direction] = value.split("-") as [SortField, SortDirection];
+    setSortField(field);
+    setSortDirection(direction);
+    setSortPickerOpen(false);
+  };
+
+  // Get current sort option label
+  const getCurrentSortLabel = () => {
+    const currentValue = `${sortField}-${sortDirection}`;
+    return (
+      sortOptions.find((option) => option.value === currentValue)?.label ||
+      "Sort by"
+    );
+  };
+
   /**
    * tRPC Mutations for CRUD Operations
    * All data modifications go through backend API for validation and business logic
@@ -614,11 +646,102 @@ export default function ProductsPage() {
           </button>
         </div>
 
-        {/* Products Table */}
+        {/* Products Display - Mobile Cards / Desktop Table */}
         <div className="overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm">
           {paginatedProducts.length > 0 ? (
             <>
-              <div className="overflow-x-auto">
+              {/* Mobile Card View */}
+              <div className="block md:hidden">
+                <div className="p-4">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Products ({filteredAndSortedProducts.length})
+                    </h3>
+                    <button
+                      onClick={() => setSortPickerOpen(true)}
+                      className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 active:bg-gray-100"
+                    >
+                      <span>{getCurrentSortLabel()}</span>
+                      <ArrowUpDown className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-3">
+                    {paginatedProducts.map((product) => (
+                      <div
+                        key={product.id}
+                        className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="min-w-0 flex-1">
+                            <h4 className="truncate text-base font-semibold text-gray-900">
+                              {product.name}
+                            </h4>
+                            <div className="mt-2 space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-500">
+                                  Category:
+                                </span>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {product.category}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-500">
+                                  Expires:
+                                </span>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {formatDate(product.expiryDate)}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-sm text-gray-500">
+                                  Quantity:
+                                </span>
+                                <span className="text-sm font-medium text-gray-900">
+                                  {product.quantity}
+                                </span>
+                              </div>
+                              {product.batchNumber && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-sm text-gray-500">
+                                    Batch:
+                                  </span>
+                                  <span className="text-sm font-medium text-gray-900">
+                                    {product.batchNumber}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="mt-3">
+                              {getStatusBadge(product.expiryDate)}
+                            </div>
+                          </div>
+                          <div className="ml-4 flex flex-col gap-2">
+                            <button
+                              onClick={() => handleEditProduct(product)}
+                              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
+                              title="Edit product"
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(product)}
+                              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                              title="Delete product"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Desktop Table View */}
+              <div className="hidden overflow-x-auto md:block">
                 <table className="w-full">
                   <thead className="border-b border-gray-100 bg-gray-50">
                     <tr>
@@ -764,78 +887,113 @@ export default function ProductsPage() {
               </div>
 
               {/* Pagination Controls */}
-              <div className="flex items-center justify-between border-t border-gray-100 bg-gray-50 px-6 py-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-gray-700">Show</span>
-                  <select
-                    value={pageSize}
-                    onChange={(e) => setPageSize(Number(e.target.value))}
-                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                  >
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={50}>50</option>
-                  </select>
-                  <span className="text-sm text-gray-700">
-                    of {filteredAndSortedProducts.length} results
-                  </span>
+              <div className="border-t border-gray-100 bg-gray-50 px-4 py-4 md:px-6">
+                {/* Mobile Pagination */}
+                <div className="flex flex-col gap-4 md:hidden">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-700">
+                      Page {currentPage} of {totalPages}
+                    </span>
+                    <span className="text-sm text-gray-700">
+                      {filteredAndSortedProducts.length} results
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                      Previous
+                    </button>
+                    <button
+                      onClick={() =>
+                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+                      }
+                      disabled={currentPage === totalPages}
+                      className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="rounded-lg border border-gray-200 p-2 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                    title="Previous page"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </button>
-
-                  <div className="flex items-center gap-1">
-                    {Array.from({ length: totalPages }, (_, i) => i + 1)
-                      .filter((page) => {
-                        // Show first page, last page, current page, and pages around current
-                        return (
-                          page === 1 ||
-                          page === totalPages ||
-                          (page >= currentPage - 1 && page <= currentPage + 1)
-                        );
-                      })
-                      .map((page, index, array) => {
-                        // Add ellipsis
-                        const prevPage = array[index - 1];
-                        const showEllipsis = prevPage && page - prevPage > 1;
-
-                        return (
-                          <div key={page} className="flex items-center gap-1">
-                            {showEllipsis && (
-                              <span className="px-2 text-gray-400">...</span>
-                            )}
-                            <button
-                              onClick={() => setCurrentPage(page)}
-                              className={`min-w-[2.5rem] rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
-                                currentPage === page
-                                  ? "bg-indigo-600 text-white"
-                                  : "border border-gray-200 hover:bg-white"
-                              }`}
-                            >
-                              {page}
-                            </button>
-                          </div>
-                        );
-                      })}
+                {/* Desktop Pagination */}
+                <div className="hidden items-center justify-between md:flex">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-700">Show</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => setPageSize(Number(e.target.value))}
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                    </select>
+                    <span className="text-sm text-gray-700">
+                      of {filteredAndSortedProducts.length} results
+                    </span>
                   </div>
 
-                  <button
-                    onClick={() =>
-                      setCurrentPage((p) => Math.min(totalPages, p + 1))
-                    }
-                    disabled={currentPage === totalPages}
-                    className="rounded-lg border border-gray-200 p-2 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
-                    title="Next page"
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="rounded-lg border border-gray-200 p-2 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                      title="Previous page"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+
+                    <div className="flex items-center gap-1">
+                      {Array.from({ length: totalPages }, (_, i) => i + 1)
+                        .filter((page) => {
+                          // Show first page, last page, current page, and pages around current
+                          return (
+                            page === 1 ||
+                            page === totalPages ||
+                            (page >= currentPage - 1 && page <= currentPage + 1)
+                          );
+                        })
+                        .map((page, index, array) => {
+                          // Add ellipsis
+                          const prevPage = array[index - 1];
+                          const showEllipsis = prevPage && page - prevPage > 1;
+
+                          return (
+                            <div key={page} className="flex items-center gap-1">
+                              {showEllipsis && (
+                                <span className="px-2 text-gray-400">...</span>
+                              )}
+                              <button
+                                onClick={() => setCurrentPage(page)}
+                                className={`min-w-[2.5rem] rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                                  currentPage === page
+                                    ? "bg-indigo-600 text-white"
+                                    : "border border-gray-200 hover:bg-white"
+                                }`}
+                              >
+                                {page}
+                              </button>
+                            </div>
+                          );
+                        })}
+                    </div>
+
+                    <button
+                      onClick={() =>
+                        setCurrentPage((p) => Math.min(totalPages, p + 1))
+                      }
+                      disabled={currentPage === totalPages}
+                      className="rounded-lg border border-gray-200 p-2 transition-colors hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+                      title="Next page"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </>
@@ -917,6 +1075,83 @@ export default function ProductsPage() {
                   className="flex-1 rounded-lg bg-red-600 px-4 py-2 font-medium text-white transition-colors hover:bg-red-700"
                 >
                   Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Mobile Sort Picker Bottom Sheet */}
+        {sortPickerOpen && (
+          <div className="fixed inset-0 z-50 md:hidden">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/50"
+              onClick={() => setSortPickerOpen(false)}
+            />
+
+            {/* Bottom Sheet */}
+            <div className="absolute right-0 bottom-0 left-0 rounded-t-2xl bg-white shadow-2xl">
+              {/* Handle */}
+              <div className="flex justify-center pt-3 pb-2">
+                <div className="h-1 w-12 rounded-full bg-gray-300" />
+              </div>
+
+              {/* Header */}
+              <div className="border-b border-gray-100 px-6 py-4">
+                <h3 className="text-lg font-semibold text-gray-900">
+                  Sort Products
+                </h3>
+                <p className="text-sm text-gray-500">
+                  Choose how to sort your products
+                </p>
+              </div>
+
+              {/* Options */}
+              <div className="max-h-96 overflow-y-auto px-6 py-2">
+                {sortOptions.map((option) => {
+                  const isSelected =
+                    `${sortField}-${sortDirection}` === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      onClick={() => handleSortSelection(option.value)}
+                      className={`w-full rounded-lg px-4 py-4 text-left transition-colors ${
+                        isSelected
+                          ? "bg-indigo-50 text-indigo-700"
+                          : "text-gray-900 hover:bg-gray-50 active:bg-gray-100"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{option.label}</span>
+                        {isSelected && (
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600">
+                            <svg
+                              className="h-4 w-4 text-white"
+                              fill="currentColor"
+                              viewBox="0 0 20 20"
+                            >
+                              <path
+                                fillRule="evenodd"
+                                d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                                clipRule="evenodd"
+                              />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Cancel Button */}
+              <div className="border-t border-gray-100 px-6 py-4">
+                <button
+                  onClick={() => setSortPickerOpen(false)}
+                  className="w-full rounded-lg border border-gray-200 bg-white px-4 py-3 font-medium text-gray-700 transition-colors hover:bg-gray-50 active:bg-gray-100"
+                >
+                  Cancel
                 </button>
               </div>
             </div>
