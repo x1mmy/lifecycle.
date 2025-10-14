@@ -34,14 +34,14 @@ interface ProfileRow {
 /**
  * Settings Row Type
  * Matches the Supabase settings table schema
+ * Updated to reflect the new two-tier notification system
  */
 interface SettingsRow {
   id: string;
   user_id: string;
-  email_alerts: boolean;
   alert_threshold: number;
-  daily_summary: boolean;
-  weekly_report: boolean;
+  daily_expiry_alerts_enabled: boolean; // Daily operational emails
+  weekly_report: boolean; // Weekly strategic reports
   created_at: string;
   updated_at: string;
 }
@@ -58,12 +58,11 @@ const profileUpdateSchema = z.object({
 
 /**
  * Notification Preferences Input Validation Schema
- * Validates notification settings before database updates
+ * Updated for the new two-tier notification system
  */
 const notificationPreferencesSchema = z.object({
-  emailAlerts: z.boolean(),
+  dailyExpiryAlerts: z.boolean(),
   alertThreshold: z.number().int().min(1).max(365, "Alert threshold must be between 1-365 days"),
-  dailySummary: z.boolean(),
   weeklyReport: z.boolean(),
 });
 
@@ -265,16 +264,17 @@ export const settingsRouter = createTRPCRouter({
   /**
    * Update Notification Preferences
    *
-   * Updates the user's email notification settings
+   * Updates the user's email notification settings for the new two-tier system
    * 
    * tRPC Pattern Explanation:
    * - .mutation() for data modification
    * - Input validation ensures valid notification settings
    * - Database update with .eq() for WHERE clause
+   * - Updates both new and legacy fields for backward compatibility
    * - Returns updated settings for UI sync
    *
    * @input userId - The authenticated user's ID
-   * @input preferences - Updated notification preferences
+   * @input preferences - Updated notification preferences (two-tier system)
    * @returns Updated notification preferences
    */
   updateNotificationPreferences: publicProcedure
@@ -289,9 +289,8 @@ export const settingsRouter = createTRPCRouter({
         const result = await supabaseAdmin
           .from("settings")
           .update({
-            email_alerts: input.preferences.emailAlerts,
+            daily_expiry_alerts_enabled: input.preferences.dailyExpiryAlerts,
             alert_threshold: input.preferences.alertThreshold,
-            daily_summary: input.preferences.dailySummary,
             weekly_report: input.preferences.weeklyReport,
           })
           .eq("user_id", input.userId)

@@ -23,7 +23,7 @@ async function sendTestEmail() {
     // Send a simple test email
     const data = await resend.emails.send({
       from: 'LifeCycle <notifications@lifecycle.cloud>',
-      to: ['dylanpham89892@gmail.com'], // Replace with your actual email
+      to: ['zimraan2012@gmail.com'], // Replace with your actual email
       subject: '🎉 LifeCycle Email System is Live! - TEST',
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">

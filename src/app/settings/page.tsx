@@ -36,8 +36,7 @@ export default function SettingsPage() {
   // });
 
   const [notifications, setNotifications] = useState({
-    emailAlerts: true,
-    dailySummary: false,
+    dailyExpiryAlerts: true,
     weeklyReport: false,
     alertDays: 7,
   });
@@ -125,8 +124,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (notificationPrefs) {
       setNotifications({
-        emailAlerts: notificationPrefs.email_alerts ?? true,
-        dailySummary: notificationPrefs.daily_summary ?? false,
+        dailyExpiryAlerts: notificationPrefs.daily_expiry_alerts_enabled ?? true,
         weeklyReport: notificationPrefs.weekly_report ?? false,
         alertDays: notificationPrefs.alert_threshold ?? 7,
       });
@@ -181,9 +179,8 @@ export default function SettingsPage() {
     updateNotificationsMutation.mutate({
       userId: user.id,
       preferences: {
-        emailAlerts: notifications.emailAlerts,
+        dailyExpiryAlerts: notifications.dailyExpiryAlerts,
         alertThreshold: notifications.alertDays,
-        dailySummary: notifications.dailySummary,
         weeklyReport: notifications.weeklyReport,
       },
     });
@@ -321,78 +318,55 @@ export default function SettingsPage() {
             <h2 className="text-xl font-semibold text-gray-900 mb-6">Notification Preferences</h2>
            
             <div className="space-y-6">
-              {/* Email Alerts Toggle */}
+              {/* Daily Expiry Alerts Toggle */}
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="font-medium text-gray-900">Email Alerts</p>
+                  <p className="font-medium text-gray-900">Daily Expiry Alerts</p>
                   <p className="text-sm text-gray-500">
-                    Receive alerts for expiring products
+                    Daily email with all products expiring within your chosen timeframe
                   </p>
                 </div>
                 <button
                   onClick={() => {
-                    const newValue = !notifications.emailAlerts;
-                    setNotifications({ ...notifications, emailAlerts: newValue });
+                    const newValue = !notifications.dailyExpiryAlerts;
+                    setNotifications({ ...notifications, dailyExpiryAlerts: newValue });
                   }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    notifications.emailAlerts ? 'bg-indigo-600' : 'bg-gray-200'
+                    notifications.dailyExpiryAlerts ? 'bg-indigo-600' : 'bg-gray-200'
                   }`}
                 >
                   <span
                     className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      notifications.emailAlerts ? 'translate-x-6' : 'translate-x-1'
+                      notifications.dailyExpiryAlerts ? 'translate-x-6' : 'translate-x-1'
                     }`}
                   />
                 </button>
               </div>
 
-              {/* Alert Days Dropdown */}
-              <div>
-                <label className="block text-sm font-medium text-gray-900 mb-2">
-                  Alert me when products expire in:
-                </label>
-                <div className="relative">
-                  <select
-                    value={notifications.alertDays}
-                    onChange={(e) => {
-                      const newValue = Number(e.target.value);
-                      setNotifications({ ...notifications, alertDays: newValue });
-                    }}
-                    className="w-full px-4 py-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-900 appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white"
-                  >
-                    <option value={3}>3 days</option>
-                    <option value={7}>7 days</option>
-                    <option value={14}>14 days</option>
-                    <option value={30}>30 days</option>
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
-                </div>
-              </div>
-
-              {/* Daily Summary Toggle */}
-              <div className="flex items-center justify-between">
+              {/* Alert Days Dropdown - Only show when daily alerts are enabled */}
+              {notifications.dailyExpiryAlerts && (
                 <div>
-                  <p className="font-medium text-gray-900">Daily Summary</p>
-                  <p className="text-sm text-gray-500">
-                    Daily email with inventory status
-                  </p>
+                  <label className="block text-sm font-medium text-gray-900 mb-2">
+                    Include products expiring within:
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={notifications.alertDays}
+                      onChange={(e) => {
+                        const newValue = Number(e.target.value);
+                        setNotifications({ ...notifications, alertDays: newValue });
+                      }}
+                      className="w-full px-4 py-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-900 appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white"
+                    >
+                      <option value={3}>3 days</option>
+                      <option value={7}>7 days</option>
+                      <option value={14}>14 days</option>
+                      <option value={30}>30 days</option>
+                    </select>
+                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400 pointer-events-none" />
+                  </div>
                 </div>
-                <button
-                  onClick={() => {
-                    const newValue = !notifications.dailySummary;
-                    setNotifications({ ...notifications, dailySummary: newValue });
-                  }}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    notifications.dailySummary ? 'bg-indigo-600' : 'bg-gray-200'
-                  }`}
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      notifications.dailySummary ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-              </div>
+              )}
 
               {/* Weekly Report Toggle */}
               <div className="flex items-center justify-between">
