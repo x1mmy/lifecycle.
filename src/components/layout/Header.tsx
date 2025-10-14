@@ -210,7 +210,7 @@ export const Header = () => {
                       onClick={handleMobileMenuClose}
                       className={`group flex items-center justify-between rounded-xl px-4 py-4 text-base font-medium transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
                         isActive(link.path)
-                          ? "border border-purple-100 bg-gradient-to-r from-purple-50 to-indigo-50 text-purple-600 shadow-sm"
+                          ? "border border-indigo-100 bg-gradient-to-r from-indigo-50 to-indigo-50 text-indigo-600 shadow-sm"
                           : "text-gray-700 hover:bg-gray-50 active:bg-gray-100"
                       }`}
                       style={{
@@ -242,7 +242,7 @@ export const Header = () => {
                       <ChevronRight
                         className={`h-5 w-5 transition-all duration-200 ${
                           isActive(link.path)
-                            ? "text-purple-400 group-hover:translate-x-1"
+                            ? "text-indigo-400 group-hover:translate-x-1"
                             : "text-gray-300 group-hover:translate-x-1 group-hover:text-gray-400"
                         }`}
                       />
@@ -268,8 +268,8 @@ export const Header = () => {
                       : "translateX(-20px)",
                   }}
                 >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-purple-100 to-indigo-100 ring-2 ring-purple-200">
-                    <User className="h-6 w-6 text-purple-600" />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-indigo-100 to-indigo-100 ring-2 ring-indigo-200">
+                    <User className="h-6 w-6 text-indigo-600" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-gray-900">
