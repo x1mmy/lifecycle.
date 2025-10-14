@@ -105,7 +105,7 @@ export const settingsRouter = createTRPCRouter({
           .eq("id", input.userId)
           .single(); // .single() expects exactly one row
         
-        const data = result.data;
+        const data = result.data as Record<string, unknown> | null;
         const error = result.error;
 
         if (error) {
@@ -117,7 +117,7 @@ export const settingsRouter = createTRPCRouter({
         }
 
         // Return the profile data with proper typing
-        return data as ProfileRow;
+        return data as unknown as ProfileRow;
       } catch (error) {
         console.error("[Settings getProfile Error]", error);
         if (error instanceof TRPCError) throw error;
@@ -165,7 +165,7 @@ export const settingsRouter = createTRPCRouter({
           .select() // Return the updated data
           .single();
         
-        const data = result.data;
+        const data = result.data as Record<string, unknown> | null;
         const error = result.error;
 
         if (error) {
@@ -202,7 +202,7 @@ export const settingsRouter = createTRPCRouter({
           // The user can refresh the page to see the updated business name in the header
         }
 
-        return data as ProfileRow;
+        return data as unknown as ProfileRow;
       } catch (error) {
         console.error("[Settings updateProfile Error]", error);
         if (error instanceof TRPCError) throw error;
@@ -240,7 +240,7 @@ export const settingsRouter = createTRPCRouter({
           .eq("user_id", input.userId)
           .single();
         
-        const data = result.data;
+        const data = result.data as Record<string, unknown> | null;
         const error = result.error;
 
         if (error) {
@@ -251,7 +251,7 @@ export const settingsRouter = createTRPCRouter({
           });
         }
 
-        return data as SettingsRow;
+        return data as unknown as SettingsRow;
       } catch (error) {
         console.error("[Settings getNotificationPreferences Error]", error);
         if (error instanceof TRPCError) throw error;
@@ -298,7 +298,7 @@ export const settingsRouter = createTRPCRouter({
           .select()
           .single();
         
-        const data = result.data;
+        const data = result.data as Record<string, unknown> | null;
         const error = result.error;
 
         if (error) {
@@ -316,7 +316,7 @@ export const settingsRouter = createTRPCRouter({
           });
         }
 
-        return data as SettingsRow;
+        return data as unknown as SettingsRow;
       } catch (error) {
         console.error("[Settings updateNotificationPreferences Error]", error);
         if (error instanceof TRPCError) throw error;

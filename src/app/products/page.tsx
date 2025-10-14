@@ -143,7 +143,7 @@ export default function ProductsPage() {
   const getCurrentSortLabel = () => {
     const currentValue = `${sortField}-${sortDirection}`;
     return (
-      sortOptions.find((option) => option.value === currentValue)?.label ||
+      sortOptions.find((option) => option.value === currentValue)?.label ??
       "Sort by"
     );
   };

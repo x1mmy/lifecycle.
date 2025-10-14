@@ -10,7 +10,6 @@ import { Button } from "~/components/ui/button";
 export const Header = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
-  const [isClosing, setIsClosing] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout, isAdmin } = useSupabaseAuth();
@@ -23,7 +22,6 @@ export const Header = () => {
   // Handle mobile menu open with enhanced animation
   const handleMobileMenuOpen = () => {
     setMobileMenuOpen(true);
-    setIsClosing(false);
     // Use requestAnimationFrame to ensure the DOM is updated before starting animation
     requestAnimationFrame(() => {
       setIsAnimating(true);
@@ -32,12 +30,10 @@ export const Header = () => {
 
   // Handle mobile menu close with enhanced animation
   const handleMobileMenuClose = () => {
-    setIsClosing(true);
     setIsAnimating(false);
     // Use a timeout to match the actual animation duration
     setTimeout(() => {
       setMobileMenuOpen(false);
-      setIsClosing(false);
     }, 300); // Match CSS transition duration
   };
 
