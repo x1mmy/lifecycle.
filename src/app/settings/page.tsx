@@ -333,8 +333,6 @@ export default function SettingsPage() {
                   onClick={() => {
                     const newValue = !notifications.emailAlerts;
                     setNotifications({ ...notifications, emailAlerts: newValue });
-                    // Auto-save notification preferences
-                    setTimeout(() => handleNotificationUpdate(), 100);
                   }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     notifications.emailAlerts ? 'bg-indigo-600' : 'bg-gray-200'
@@ -359,8 +357,6 @@ export default function SettingsPage() {
                     onChange={(e) => {
                       const newValue = Number(e.target.value);
                       setNotifications({ ...notifications, alertDays: newValue });
-                      // Auto-save notification preferences
-                      setTimeout(() => handleNotificationUpdate(), 100);
                     }}
                     className="w-full px-4 py-2 border border-gray-200 bg-gray-50 rounded-lg text-gray-900 appearance-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white"
                   >
@@ -385,8 +381,6 @@ export default function SettingsPage() {
                   onClick={() => {
                     const newValue = !notifications.dailySummary;
                     setNotifications({ ...notifications, dailySummary: newValue });
-                    // Auto-save notification preferences
-                    setTimeout(() => handleNotificationUpdate(), 100);
                   }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     notifications.dailySummary ? 'bg-indigo-600' : 'bg-gray-200'
@@ -412,8 +406,6 @@ export default function SettingsPage() {
                   onClick={() => {
                     const newValue = !notifications.weeklyReport;
                     setNotifications({ ...notifications, weeklyReport: newValue });
-                    // Auto-save notification preferences
-                    setTimeout(() => handleNotificationUpdate(), 100);
                   }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     notifications.weeklyReport ? 'bg-indigo-600' : 'bg-gray-200'
@@ -427,6 +419,20 @@ export default function SettingsPage() {
                 </button>
               </div>
             </div>
+              <button 
+                onClick={handleNotificationUpdate}
+                disabled={updateNotificationsMutation.isPending}
+                className="mt-8 px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {updateNotificationsMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Notifications'
+                )}
+              </button>
           </div>
 
           {/* Change Password */}
