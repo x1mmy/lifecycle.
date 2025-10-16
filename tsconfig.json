@@ -23,6 +23,7 @@
     "jsx": "preserve",
     "plugins": [{ "name": "next" }],
     "incremental": true,
+    "allowImportingTsExtensions": true,
 
     /* Path Aliases */
     "baseUrl": ".",
