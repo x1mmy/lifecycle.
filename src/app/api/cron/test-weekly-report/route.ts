@@ -1,6 +1,33 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendWeeklyReportEmail, type Product, type UserEmailData, type EmailStats } from '../../../../lib/email-service';
+
+// Type definitions for database queries
+interface Profile {
+  id: string;
+  business_name: string;
+  email: string;
+  is_active: boolean;
+}
+
+interface DatabaseProduct {
+  id: string;
+  name: string;
+  category: string;
+  expiry_date: string;
+  quantity: number;
+  batch_number?: string;
+  supplier?: string;
+  location?: string;
+}
+
+interface SupabaseError {
+  message: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+}
 
 // Initialize Supabase admin client
 const supabase = createClient(
@@ -40,17 +67,13 @@ async function getUserEmailStats(userId: string): Promise<{
   const { data: allProducts, error: allProductsError } = await supabase
     .from('products')
     .select('*')
-    .eq('user_id', userId);
+    .eq('user_id', userId) as { data: DatabaseProduct[] | null; error: SupabaseError | null };
 
   if (allProductsError) {
     throw new Error(`Failed to fetch products: ${allProductsError.message}`);
   }
 
-  const products = allProducts || [];
-  const today = new Date().toISOString().split('T')[0];
-  const thirtyDaysFromNow = new Date();
-  thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-  const thirtyDaysFromNowStr = thirtyDaysFromNow.toISOString().split('T')[0];
+  const products = allProducts ?? [];
 
   // Categorize products
   const expiredProducts: Product[] = [];
@@ -114,7 +137,7 @@ async function getUserEmailStats(userId: string): Promise<{
 /**
  * Test weekly report cron job endpoint that uses a specific user ID
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     console.log('🚀 Starting TEST weekly report cron job...');
 
@@ -123,7 +146,7 @@ export async function GET(request: NextRequest) {
       .from('profiles')
       .select('*')
       .eq('id', TEST_USER_ID)
-      .single();
+      .single() as { data: Profile | null; error: SupabaseError | null };
 
     if (profileError) {
       console.error('❌ Error fetching test user profile:', profileError);
@@ -195,8 +218,7 @@ export async function GET(request: NextRequest) {
       console.log(`✅ Created ${insertedProducts?.length || 0} test products`);
       
       // Refresh stats with new products
-      const newStats = await getUserEmailStats(profile.id);
-      const { stats: finalStats, expiringProducts: finalExpiring, expiredProducts: finalExpired } = newStats;
+      await getUserEmailStats(profile.id);
     }
 
     // Send email

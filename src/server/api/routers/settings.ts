@@ -47,6 +47,16 @@ interface SettingsRow {
 }
 
 /**
+ * Supabase Error Type
+ */
+interface SupabaseError {
+  message: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+}
+
+/**
  * Profile Update Input Validation Schema
  * Validates profile fields before database updates
  */
@@ -102,7 +112,7 @@ export const settingsRouter = createTRPCRouter({
           .from("profiles")
           .select("*")
           .eq("id", input.userId)
-          .single(); // .single() expects exactly one row
+          .single() as { data: ProfileRow | null; error: SupabaseError | null };
         
         const data = result.data as Record<string, unknown> | null;
         const error = result.error;
@@ -117,6 +127,7 @@ export const settingsRouter = createTRPCRouter({
 
         // Return the profile data with proper typing
         return data as unknown as ProfileRow;
+
       } catch (error) {
         console.error("[Settings getProfile Error]", error);
         if (error instanceof TRPCError) throw error;
@@ -162,7 +173,7 @@ export const settingsRouter = createTRPCRouter({
           })
           .eq("id", input.userId) // WHERE clause to target specific user
           .select() // Return the updated data
-          .single();
+          .single() as { data: ProfileRow | null; error: SupabaseError | null };
         
         const data = result.data as Record<string, unknown> | null;
         const error = result.error;
@@ -237,7 +248,7 @@ export const settingsRouter = createTRPCRouter({
           .from("settings")
           .select("*")
           .eq("user_id", input.userId)
-          .single();
+          .single() as { data: SettingsRow | null; error: SupabaseError | null };
         
         const data = result.data as Record<string, unknown> | null;
         const error = result.error;
@@ -295,7 +306,7 @@ export const settingsRouter = createTRPCRouter({
           })
           .eq("user_id", input.userId)
           .select()
-          .single();
+          .single() as { data: SettingsRow | null; error: SupabaseError | null };
         
         const data = result.data as Record<string, unknown> | null;
         const error = result.error;

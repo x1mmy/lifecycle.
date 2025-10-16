@@ -1,6 +1,33 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendWeeklyReportEmail, type Product, type UserEmailData, type EmailStats } from '../../../../lib/email-service';
+
+// Type definitions for database queries
+interface Profile {
+  id: string;
+  business_name: string;
+  email: string;
+  is_active: boolean;
+}
+
+interface DatabaseProduct {
+  id: string;
+  name: string;
+  category: string;
+  expiry_date: string;
+  quantity: number;
+  batch_number?: string;
+  supplier?: string;
+  location?: string;
+}
+
+interface SupabaseError {
+  message: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+}
 
 // Initialize Supabase admin client
 const supabase = createClient(
@@ -37,17 +64,13 @@ async function getUserEmailStats(userId: string): Promise<{
   const { data: allProducts, error: allProductsError } = await supabase
     .from('products')
     .select('*')
-    .eq('user_id', userId);
+    .eq('user_id', userId) as { data: DatabaseProduct[] | null; error: SupabaseError | null };
 
   if (allProductsError) {
     throw new Error(`Failed to fetch products: ${allProductsError.message}`);
   }
 
-  const products = allProducts || [];
-  const today = new Date().toISOString().split('T')[0];
-  const thirtyDaysFromNow = new Date();
-  thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
-  const thirtyDaysFromNowStr = thirtyDaysFromNow.toISOString().split('T')[0];
+  const products = allProducts ?? [];
 
   // Categorize products
   const expiredProducts: Product[] = [];
@@ -58,7 +81,7 @@ async function getUserEmailStats(userId: string): Promise<{
     const daysUntilExpiry = calculateDaysUntilExpiry(product.expiry_date);
     
     // Count categories
-    categoryCounts[product.category] = (categoryCounts[product.category] || 0) + 1;
+    categoryCounts[product.category] = (categoryCounts[product.category] ?? 0) + 1;
 
     // Transform to Product type
     const transformedProduct: Product = {
@@ -137,7 +160,7 @@ export async function GET(request: NextRequest) {
           is_active
         )
       `)
-      .eq('weekly_report', true);
+      .eq('weekly_report', true) as { data: Array<{user_id: string; profiles: Profile}> | null; error: SupabaseError | null };
 
     if (usersError) {
       console.error('❌ Error fetching users:', usersError);
@@ -162,7 +185,7 @@ export async function GET(request: NextRequest) {
     // Process each user
     for (const userSetting of users) {
       try {
-        const profile = userSetting.profiles as any;
+        const profile = userSetting.profiles;
         
         // Skip inactive users
         if (!profile.is_active) {
@@ -200,7 +223,7 @@ export async function GET(request: NextRequest) {
 
       } catch (userError) {
         console.error(`❌ Error processing user ${userSetting.user_id}:`, userError);
-        errors.push(`Error processing user ${userSetting.user_id}: ${userError}`);
+        errors.push(`Error processing user ${userSetting.user_id}: ${userError instanceof Error ? userError.message : String(userError)}`);
       }
     }
 

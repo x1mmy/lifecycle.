@@ -1,6 +1,40 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendDailyExpiryAlert, type Product, type UserEmailData } from '../../../../lib/email-service';
+
+// Type definitions for database queries
+interface Profile {
+  id: string;
+  business_name: string;
+  email: string;
+  is_active: boolean;
+}
+
+interface UserSetting {
+  user_id: string;
+  alert_threshold: number;
+  daily_expiry_alerts_enabled: boolean;
+  profiles: Profile;
+}
+
+interface DatabaseProduct {
+  id: string;
+  name: string;
+  category: string;
+  expiry_date: string;
+  quantity: number;
+  batch_number?: string;
+  supplier?: string;
+  location?: string;
+}
+
+interface SupabaseError {
+  message: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+}
 
 // Initialize Supabase admin client
 const supabase = createClient(
@@ -61,7 +95,7 @@ export async function GET(request: NextRequest) {
           is_active
         )
       `)
-      .eq('daily_expiry_alerts_enabled', true);
+      .eq('daily_expiry_alerts_enabled', true) as { data: UserSetting[] | null; error: SupabaseError | null };
 
     if (usersError) {
       console.error('❌ Error fetching users:', usersError);
@@ -86,7 +120,7 @@ export async function GET(request: NextRequest) {
     // Process each user
     for (const userSetting of users) {
       try {
-        const profile = userSetting.profiles as any;
+        const profile = userSetting.profiles;
         
         // Skip inactive users
         if (!profile.is_active) {
@@ -108,7 +142,7 @@ export async function GET(request: NextRequest) {
           .eq('user_id', profile.id)
           .gte('expiry_date', today)
           .lte('expiry_date', thresholdDateStr)
-          .order('expiry_date', { ascending: true });
+          .order('expiry_date', { ascending: true }) as { data: DatabaseProduct[] | null; error: SupabaseError | null };
 
         if (productsError) {
           console.error(`❌ Error fetching products for ${profile.email}:`, productsError);
@@ -155,7 +189,7 @@ export async function GET(request: NextRequest) {
 
       } catch (userError) {
         console.error(`❌ Error processing user ${userSetting.user_id}:`, userError);
-        errors.push(`Error processing user ${userSetting.user_id}: ${userError}`);
+        errors.push(`Error processing user ${userSetting.user_id}: ${userError instanceof Error ? userError.message : String(userError)}`);
       }
     }
 
