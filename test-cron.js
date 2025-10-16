@@ -16,6 +16,8 @@ const CRON_SECRET = process.env.CRON_SECRET || 'test-secret-key';
 
 /**
  * Test a cron endpoint
+ * @param {string} endpoint - The endpoint URL path to test
+ * @param {string} description - Description of what is being tested
  */
 async function testCronEndpoint(endpoint, description) {
   console.log(`\n🧪 Testing ${description}...`);
@@ -42,7 +44,7 @@ async function testCronEndpoint(endpoint, description) {
 
   } catch (error) {
     console.log(`❌ ${description} - ERROR`);
-    console.log(`   Error:`, error.message);
+    console.log(`   Error:`, error instanceof Error ? error.message : String(error));
   }
 }
 
@@ -68,7 +70,7 @@ async function testEmailService() {
 
   } catch (error) {
     console.log(`❌ Email Service - ERROR`);
-    console.log(`   Error:`, error.message);
+    console.log(`   Error:`, error instanceof Error ? error.message : String(error));
   }
 }
 

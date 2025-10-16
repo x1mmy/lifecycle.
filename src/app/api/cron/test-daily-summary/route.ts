@@ -1,6 +1,37 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { sendDailyExpiryAlert, type Product, type UserEmailData } from '../../../../lib/email-service';
+
+// Type definitions for database queries
+interface Profile {
+  id: string;
+  business_name: string;
+  email: string;
+  is_active: boolean;
+}
+
+interface UserSetting {
+  alert_threshold: number;
+}
+
+interface DatabaseProduct {
+  id: string;
+  name: string;
+  category: string;
+  expiry_date: string;
+  quantity: number;
+  batch_number?: string;
+  supplier?: string;
+  location?: string;
+}
+
+interface SupabaseError {
+  message: string;
+  details?: string;
+  hint?: string;
+  code?: string;
+}
 
 // Initialize Supabase admin client
 const supabase = createClient(
@@ -31,7 +62,7 @@ function calculateDaysUntilExpiry(expiryDate: string): number {
 /**
  * Test cron job endpoint that uses a specific user ID
  */
-export async function GET(request: NextRequest) {
+export async function GET(_request: NextRequest) {
   try {
     console.log('🚀 Starting TEST daily expiry alert cron job...');
 
@@ -40,7 +71,7 @@ export async function GET(request: NextRequest) {
       .from('profiles')
       .select('*')
       .eq('id', TEST_USER_ID)
-      .single();
+      .single() as { data: Profile | null; error: SupabaseError | null };
 
     if (profileError) {
       console.error('❌ Error fetching test user profile:', profileError);
@@ -57,7 +88,7 @@ export async function GET(request: NextRequest) {
       .from('settings')
       .select('alert_threshold')
       .eq('user_id', TEST_USER_ID)
-      .single();
+      .single() as { data: UserSetting | null; error: SupabaseError | null };
 
     const alertThreshold = userSettings?.alert_threshold ?? 7;
     
@@ -80,7 +111,7 @@ export async function GET(request: NextRequest) {
       .eq('user_id', profile.id)
       .gte('expiry_date', today)
       .lte('expiry_date', thresholdDateStr)
-      .order('expiry_date', { ascending: true });
+      .order('expiry_date', { ascending: true }) as { data: DatabaseProduct[] | null; error: SupabaseError | null };
 
     if (productsError) {
       console.error(`❌ Error fetching products for ${profile.email}:`, productsError);
@@ -88,7 +119,7 @@ export async function GET(request: NextRequest) {
     }
 
     // If no products expiring, create some test products for demonstration
-    let testProducts = products || [];
+    let testProducts = products ?? [];
     
     if (testProducts.length === 0) {
       console.log('ℹ️ No expiring products found, creating test products...');
@@ -127,7 +158,7 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to create test products' }, { status: 500 });
       }
 
-      testProducts = insertedProducts || [];
+      testProducts = (insertedProducts ?? []) as DatabaseProduct[];
       console.log(`✅ Created ${testProducts.length} test products`);
     }
 
