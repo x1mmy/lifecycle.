@@ -34,7 +34,7 @@ export const ProductForm = ({
     name: product?.name ?? "",
     category: product?.category ?? "",
     expiryDate: product?.expiryDate ?? "",
-    quantity: product?.quantity ?? 1,
+    quantity: product?.quantity ?? "",
     batchNumber: product?.batchNumber ?? "",
     supplier: product?.supplier ?? "",
     location: product?.location ?? "",
@@ -185,7 +185,9 @@ export const ProductForm = ({
       newErrors.expiryDate = "Expiry date is required";
     }
 
-    if (!validatePositiveNumber(formData.quantity)) {
+    if (!formData.quantity || formData.quantity === "") {
+      newErrors.quantity = "Quantity is required";
+    } else if (typeof formData.quantity === "string" || !validatePositiveNumber(formData.quantity)) {
       newErrors.quantity = "Quantity must be a positive number";
     }
 
@@ -194,7 +196,13 @@ export const ProductForm = ({
       return;
     }
 
-    onSubmit(formData);
+    // Convert quantity to number for submission
+    const submitData = {
+      ...formData,
+      quantity: typeof formData.quantity === "string" ? parseInt(formData.quantity, 10) : formData.quantity,
+    };
+
+    onSubmit(submitData);
   };
 
   return (
@@ -368,9 +376,19 @@ export const ProductForm = ({
                 type="number"
                 min="1"
                 value={formData.quantity}
-                onChange={(e) =>
-                  handleChange("quantity", parseInt(e.target.value) || 0)
-                }
+                onChange={(e) => {
+                  const inputValue = e.target.value;
+                  // Allow empty string for better UX when user is typing
+                  if (inputValue === "") {
+                    handleChange("quantity", "");
+                  } else {
+                    // Parse as integer, but don't default to 0 for empty strings
+                    const numValue = parseInt(inputValue, 10);
+                    if (!isNaN(numValue) && numValue > 0) {
+                      handleChange("quantity", numValue);
+                    }
+                  }
+                }}
                 className={errors.quantity ? "border-destructive" : ""}
               />
               {errors.quantity && (
