@@ -41,7 +41,7 @@ interface ProductRow {
   name: string;
   category: string;
   expiry_date: string;
-  quantity: number;
+  quantity: number | null;
   batch_number?: string | null;
   supplier?: string | null;
   location?: string | null;
@@ -60,7 +60,27 @@ const productInputSchema = z.object({
   expiryDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
-  quantity: z.number().int().positive("Quantity must be a positive number"),
+  quantity: z
+    .union([z.string(), z.number(), z.null()])
+    .optional()
+    .transform((val) => {
+      // If no value provided, keep as null
+      if (val === undefined || val === null || val === "") {
+        return null;
+      }
+      // Convert string to number if needed
+      if (typeof val === "string") {
+        const parsed = parseInt(val, 10);
+        if (isNaN(parsed)) {
+          throw new Error("Quantity must be a valid number");
+        }
+        return parsed;
+      }
+      return val;
+    })
+    .refine((val) => val === null || (Number.isInteger(val) && val > 0), {
+      message: "Quantity must be a positive integer or null",
+    }),
   batchNumber: z.string().optional(),
   supplier: z.string().optional(),
   location: z.string().optional(),

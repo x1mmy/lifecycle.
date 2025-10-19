@@ -11,7 +11,7 @@ export interface Product {
     name: string;
     category: string;
     expiryDate: string;
-    quantity: number;
+    quantity: number | null;
     batchNumber?: string;
     supplier?: string;
     location?: string;

@@ -185,9 +185,8 @@ export const ProductForm = ({
       newErrors.expiryDate = "Expiry date is required";
     }
 
-    if (!formData.quantity || formData.quantity === "") {
-      newErrors.quantity = "Quantity is required";
-    } else if (typeof formData.quantity === "string" || !validatePositiveNumber(formData.quantity)) {
+    // Validate quantity (optional field)
+    if (formData.quantity && formData.quantity !== "" && (typeof formData.quantity === "string" || !validatePositiveNumber(formData.quantity))) {
       newErrors.quantity = "Quantity must be a positive number";
     }
 
@@ -196,10 +195,22 @@ export const ProductForm = ({
       return;
     }
 
-    // Convert quantity to number for submission
+    // Convert quantity to number for submission (allow null if empty)
+    let quantityValue: number | null = null;
+    if (formData.quantity && formData.quantity !== "") {
+      if (typeof formData.quantity === "string") {
+        quantityValue = parseInt(formData.quantity, 10);
+        if (isNaN(quantityValue)) {
+          throw new Error("Quantity must be a valid number");
+        }
+      } else {
+        quantityValue = formData.quantity;
+      }
+    }
+
     const submitData = {
       ...formData,
-      quantity: typeof formData.quantity === "string" ? parseInt(formData.quantity, 10) : formData.quantity,
+      quantity: quantityValue,
     };
 
     onSubmit(submitData);
@@ -370,7 +381,7 @@ export const ProductForm = ({
             </div>
 
             <div>
-              <Label htmlFor="quantity">Quantity *</Label>
+              <Label htmlFor="quantity">Quantity</Label>
               <Input
                 id="quantity"
                 type="number"
