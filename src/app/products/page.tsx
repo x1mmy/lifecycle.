@@ -278,8 +278,8 @@ export default function ProductsPage() {
           bVal = new Date(b.expiryDate).getTime();
           break;
         case "quantity":
-          aVal = a.quantity;
-          bVal = b.quantity;
+          aVal = a.quantity ?? 0;
+          bVal = b.quantity ?? 0;
           break;
         default:
           return 0;
