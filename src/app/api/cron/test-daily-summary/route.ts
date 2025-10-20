@@ -70,7 +70,7 @@ export async function GET(_request: NextRequest) {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', TEST_USER_ID)
+      .eq('id', 'bf72fc3b-4d9a-451a-95b0-e6b993d50111')
       .single() as { data: Profile | null; error: SupabaseError | null };
 
     if (profileError) {
@@ -87,7 +87,7 @@ export async function GET(_request: NextRequest) {
     const { data: userSettings } = await supabase
       .from('settings')
       .select('alert_threshold')
-      .eq('user_id', TEST_USER_ID)
+      .eq('user_id', 'bf72fc3b-4d9a-451a-95b0-e6b993d50111')
       .single() as { data: UserSetting | null; error: SupabaseError | null };
 
     const alertThreshold = userSettings?.alert_threshold ?? 7;

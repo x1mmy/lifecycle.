@@ -42,7 +42,7 @@ const supabase = createClient(
 );
 
 // Test user ID - replace with your actual user ID
-const TEST_USER_ID = 'a80e9709-340f-4925-ab48-ef0f4cde639e';
+const TEST_USER_ID = 'bf72fc3b-4d9a-451a-95b0-e6b993d50111';
 
 /**
  * Calculate days until expiry

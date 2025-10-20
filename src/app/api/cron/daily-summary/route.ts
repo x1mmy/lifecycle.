@@ -82,27 +82,18 @@ export async function GET(request: NextRequest) {
     console.log('🚀 Starting daily expiry alert cron job...');
 
     // Get all users who have daily expiry alerts enabled
-    const { data: users, error: usersError } = await supabase
+    // First get settings, then get profiles separately to avoid foreign key relationship issues
+    const { data: settings, error: settingsError } = await supabase
       .from('settings')
-      .select(`
-        user_id,
-        alert_threshold,
-        daily_expiry_alerts_enabled,
-        profiles!inner (
-          id,
-          business_name,
-          email,
-          is_active
-        )
-      `)
-      .eq('daily_expiry_alerts_enabled', true) as { data: UserSetting[] | null; error: SupabaseError | null };
+      .select('user_id, alert_threshold, daily_expiry_alerts_enabled')
+      .eq('daily_expiry_alerts_enabled', true) as { data: Array<{user_id: string, alert_threshold: number, daily_expiry_alerts_enabled: boolean}> | null; error: SupabaseError | null };
 
-    if (usersError) {
-      console.error('❌ Error fetching users:', usersError);
-      return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 });
+    if (settingsError) {
+      console.error('❌ Error fetching settings:', settingsError);
+      return NextResponse.json({ error: 'Failed to fetch settings' }, { status: 500 });
     }
 
-    if (!users || users.length === 0) {
+    if (!settings || settings.length === 0) {
       console.log('ℹ️ No users found with daily expiry alerts enabled');
       return NextResponse.json({ 
         message: 'No users with daily expiry alerts enabled',
@@ -110,6 +101,32 @@ export async function GET(request: NextRequest) {
         emails_sent: 0
       });
     }
+
+    // Get profiles for all users with enabled alerts
+    const userIds = settings.map(s => s.user_id);
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, business_name, email, is_active')
+      .in('id', userIds) as { data: Array<{id: string, business_name: string, email: string, is_active: boolean}> | null; error: SupabaseError | null };
+
+    if (profilesError) {
+      console.error('❌ Error fetching profiles:', profilesError);
+      return NextResponse.json({ error: 'Failed to fetch profiles' }, { status: 500 });
+    }
+
+    // Combine settings and profiles data
+    const users: UserSetting[] = settings.map(setting => {
+      const profile = profiles?.find(p => p.id === setting.user_id);
+      if (!profile) {
+        throw new Error(`Profile not found for user ${setting.user_id}`);
+      }
+      return {
+        user_id: setting.user_id,
+        alert_threshold: setting.alert_threshold,
+        daily_expiry_alerts_enabled: setting.daily_expiry_alerts_enabled,
+        profiles: profile
+      };
+    });
 
     console.log(`📧 Found ${users.length} users with daily expiry alerts enabled`);
 
