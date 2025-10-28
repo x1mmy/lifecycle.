@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useDrag } from '@use-gesture/react';
 import type { Product } from '~/types';
 import { formatDate, getDaysUntilExpiry } from '~/utils/dateUtils';
-import { AlertTriangle, XCircle, Trash2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, XCircle, Trash2, RefreshCw, Pencil } from 'lucide-react';
 import { useToast } from '~/hooks/use-toast';
 import { api } from '~/trpc/react';
 import { QuantityUpdateModal } from './QuantityUpdateModal';
@@ -88,22 +88,19 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
       // Disable swipe on desktop
       if (!isMobile) return;
 
-      // Only allow left swipe
-      if (mx > 0) {
-        setSwipeOffset(0);
-        return;
-      }
-
       // Max swipe distance is 100px
       const maxSwipe = 100;
-      const offset = Math.max(Math.min(mx, 0), -maxSwipe);
+
+      // Allow both left and right swipes
+      const offset = Math.max(Math.min(mx, maxSwipe), -maxSwipe);
 
       if (down) {
         setSwipeOffset(offset);
       } else {
         // Snap behavior based on velocity and distance
         if (Math.abs(vx) > 0.5 || Math.abs(offset) > maxSwipe / 2) {
-          setSwipeOffset(-maxSwipe); // Snap to revealed state
+          // Snap to revealed state (left or right)
+          setSwipeOffset(offset > 0 ? maxSwipe : -maxSwipe);
         } else {
           setSwipeOffset(0); // Snap back to hidden
         }
@@ -129,7 +126,18 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
     <>
       {/* Mobile: Swipeable Card */}
       <div ref={containerRef} className="relative overflow-hidden md:overflow-visible rounded-lg">
-        {/* Delete button revealed on swipe (mobile only) */}
+        {/* Edit button revealed on swipe right (mobile only) */}
+        <div className="absolute left-0 top-0 bottom-0 w-24 bg-amber-500 flex items-center justify-center md:hidden">
+          <button
+            onClick={() => setShowQuantityModal(true)}
+            className="flex flex-col items-center justify-center text-white h-full w-full"
+          >
+            <Pencil className="h-5 w-5 mb-1" />
+            <span className="text-xs font-medium">Update</span>
+          </button>
+        </div>
+
+        {/* Delete button revealed on swipe left (mobile only) */}
         <div className="absolute right-0 top-0 bottom-0 w-24 bg-red-600 flex items-center justify-center md:hidden">
           <button
             onClick={() => setShowDeleteConfirm(true)}
@@ -147,7 +155,7 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
           className={`flex items-start gap-3 p-3 rounded-lg ${bgColor} border ${borderColor} relative group touch-pan-y md:touch-auto transition-transform`}
           style={{
             transform: `translateX(${swipeOffset}px)`,
-            transition: swipeOffset === 0 || swipeOffset === -100 ? 'transform 0.3s ease-out' : 'none',
+            transition: swipeOffset === 0 || Math.abs(swipeOffset) === 100 ? 'transform 0.3s ease-out' : 'none',
           }}
         >
           <Icon className={`h-5 w-5 mt-0.5 flex-shrink-0 ${textColor}`} />
@@ -189,16 +197,6 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
             </button>
           </div>
 
-          {/* Mobile: Icon Buttons (always visible, top-right) */}
-          <div className="flex md:hidden items-center gap-1 flex-shrink-0">
-            <button
-              onClick={() => setShowQuantityModal(true)}
-              className="p-1.5 rounded hover:bg-white/80 transition-colors text-gray-500"
-              title="Update quantity"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
-          </div>
         </div>
       </div>
 

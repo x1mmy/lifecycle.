@@ -331,10 +331,13 @@ export default function DashboardPage() {
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-sm text-gray-500 mb-2">
                   Expiring within 7 days
             </p>
-            
+            <p className="text-xs text-gray-400 italic mb-4 md:hidden">
+              Swipe right to edit, swipe left to delete
+            </p>
+
             {sortedExpiringSoon.length > 0 ? (
                   <>
               <div className="space-y-3">
@@ -395,10 +398,13 @@ export default function DashboardPage() {
                     )}
                   </div>
                 </div>
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-sm text-gray-500 mb-2">
                   Remove from inventory
             </p>
-            
+            <p className="text-xs text-gray-400 italic mb-4 md:hidden">
+              Swipe right to edit, swipe left to delete
+            </p>
+
             {sortedExpired.length > 0 ? (
                   <>
               <div className="space-y-3">
