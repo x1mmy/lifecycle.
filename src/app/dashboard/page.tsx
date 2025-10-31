@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Package, AlertTriangle, XCircle, Loader2, Plus, ArrowRight, TrendingUp, Calendar, BarChart3 } from 'lucide-react';
+import { Package, AlertTriangle, XCircle, Loader2, Plus, ArrowRight, TrendingUp, Calendar, BarChart3, Trash2 } from 'lucide-react';
 import { useSupabaseAuth } from '~/hooks/useSupabaseAuth';
 import { supabase } from '~/lib/supabase';
 import type { Product } from '~/types';
@@ -10,6 +10,7 @@ import { getDaysUntilExpiry, sortByExpiry, formatDate } from '~/utils/dateUtils'
 import { Header } from '~/components/layout/Header';
 import { StatCard } from '~/components/dashboard/StatCard';
 import { ProductAlert } from '~/components/dashboard/ProductAlert';
+import { useToast } from '~/hooks/use-toast';
 
 // Database row type (snake_case from Supabase)
 interface ProductRow {
@@ -51,8 +52,11 @@ const transformProductFromDb = (row: ProductRow): Product => ({
 export default function DashboardPage() {
   const { user, loading, isAuthenticated } = useSupabaseAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   /**
    * Load products for the current user from Supabase
@@ -97,6 +101,49 @@ export default function DashboardPage() {
       void loadUserProducts();
     }
   }, [user, loadUserProducts]);
+
+  /**
+   * Bulk Delete All Expired Products
+   * Deletes all expired products for the current user
+   */
+  const handleBulkDeleteExpired = async () => {
+    if (!user) return;
+
+    setIsBulkDeleting(true);
+
+    try {
+      const expiredProductIds = expired.map((p) => p.id);
+
+      // Delete all expired products
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('user_id', user.id)
+        .in('id', expiredProductIds);
+
+      if (error) {
+        throw error;
+      }
+
+      toast({
+        title: 'Success',
+        description: `Deleted ${expiredProductIds.length} expired product${expiredProductIds.length !== 1 ? 's' : ''}`,
+      });
+
+      // Reload products
+      void loadUserProducts();
+    } catch (error) {
+      console.error('Error deleting expired products:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete expired products',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsBulkDeleting(false);
+      setShowBulkDeleteConfirm(false);
+    }
+  };
 
   /**
    * Calculate Statistics
@@ -284,15 +331,24 @@ export default function DashboardPage() {
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-sm text-gray-500 mb-2">
                   Expiring within 7 days
             </p>
-            
+            <p className="text-xs text-gray-400 italic mb-4 md:hidden">
+              Swipe right to edit, swipe left to delete
+            </p>
+
             {sortedExpiringSoon.length > 0 ? (
                   <>
               <div className="space-y-3">
                 {sortedExpiringSoon.map((product) => (
-                  <ProductAlert key={product.id} product={product} type="expiring" />
+                  <ProductAlert
+                    key={product.id}
+                    product={product}
+                    type="expiring"
+                    userId={user?.id ?? ''}
+                    onProductDeleted={loadUserProducts}
+                  />
                 ))}
                     </div>
                 {expiringSoon.length > 5 && (
@@ -324,21 +380,41 @@ export default function DashboardPage() {
                 Expired Products
               </h2>
             </div>
-                  {expired.length > 0 && (
-                    <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">
-                      {expired.length}
-                    </span>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {expired.length > 0 && (
+                      <>
+                        <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded-full">
+                          {expired.length}
+                        </span>
+                        <button
+                          onClick={() => setShowBulkDeleteConfirm(true)}
+                          className="px-3 py-1.5 bg-red-600 text-white text-xs font-medium rounded-lg hover:bg-red-700 transition-colors flex items-center gap-1.5"
+                          title="Remove all expired products"
+                        >
+                          Remove All
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <p className="text-sm text-gray-500 mb-4">
+                <p className="text-sm text-gray-500 mb-2">
                   Remove from inventory
             </p>
-            
+            <p className="text-xs text-gray-400 italic mb-4 md:hidden">
+              Swipe right to edit, swipe left to delete
+            </p>
+
             {sortedExpired.length > 0 ? (
                   <>
               <div className="space-y-3">
                 {sortedExpired.map((product) => (
-                  <ProductAlert key={product.id} product={product} type="expired" />
+                  <ProductAlert
+                    key={product.id}
+                    product={product}
+                    type="expired"
+                    userId={user?.id ?? ''}
+                    onProductDeleted={loadUserProducts}
+                  />
                 ))}
                     </div>
                 {expired.length > 5 && (
@@ -493,6 +569,37 @@ export default function DashboardPage() {
           </div>
         </div>
       </main>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      {showBulkDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-2">
+              Remove All Expired Products
+            </h3>
+            <p className="text-sm text-gray-600 mb-6">
+              Are you sure you want to delete all <span className="font-medium">{expired.length}</span> expired product{expired.length !== 1 ? 's' : ''}?
+              This action cannot be undone.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleBulkDeleteExpired}
+                disabled={isBulkDeleting}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isBulkDeleting ? 'Deleting...' : `Delete ${expired.length} Product${expired.length !== 1 ? 's' : ''}`}
+              </button>
+              <button
+                onClick={() => setShowBulkDeleteConfirm(false)}
+                disabled={isBulkDeleting}
+                className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
