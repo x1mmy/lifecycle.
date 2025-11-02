@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Package, AlertTriangle, XCircle, Loader2, Plus, ArrowRight, TrendingUp, Calendar, BarChart3, Trash2 } from 'lucide-react';
+import { Package, AlertTriangle, XCircle, Loader2, Plus, ArrowRight, TrendingUp, Calendar, BarChart3 } from 'lucide-react';
 import { useSupabaseAuth } from '~/hooks/useSupabaseAuth';
 import { supabase } from '~/lib/supabase';
 import type { Product } from '~/types';
@@ -334,7 +334,7 @@ export default function DashboardPage() {
                 <p className="text-sm text-gray-500 mb-2">
                   Expiring within 7 days
             </p>
-            <p className="text-xs text-gray-400 italic mb-4 md:hidden">
+            <p className="text-xs text-gray-400 italic mb-4 lg:hidden">
               Swipe right to edit, swipe left to delete
             </p>
 
@@ -400,7 +400,7 @@ export default function DashboardPage() {
                 <p className="text-sm text-gray-500 mb-2">
                   Remove from inventory
             </p>
-            <p className="text-xs text-gray-400 italic mb-4 md:hidden">
+            <p className="text-xs text-gray-400 italic mb-4 lg:hidden">
               Swipe right to edit, swipe left to delete
             </p>
 
