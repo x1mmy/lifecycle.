@@ -784,105 +784,225 @@ export default function ProductsPage() {
             </span>
           </button>
 
-          {/* Date Filter Button with Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setDateFilterOpen(!dateFilterOpen)}
-              className={`rounded-full px-4 py-2 text-sm font-medium transition-all flex items-center gap-2 ${
-                startDate || endDate
-                  ? "bg-purple-600 text-white shadow-md"
-                  : "border border-gray-200 bg-white text-gray-700 hover:border-purple-300 hover:bg-purple-50"
-              }`}
-            >
-              <Calendar className="h-4 w-4" />
-              Filter by Date
-              {(startDate || endDate) && (
-                <span className={`ml-1 rounded-full px-2 py-0.5 text-xs bg-purple-500`}>
-                  Active
-                </span>
-              )}
-            </button>
+          {/* Date Filter Button */}
+          <button
+            onClick={() => setDateFilterOpen(true)}
+            className={`rounded-full px-4 py-2 text-sm font-medium transition-all flex items-center gap-2 ${
+              startDate || endDate
+                ? "bg-purple-600 text-white shadow-md"
+                : "border border-gray-200 bg-white text-gray-700 hover:border-purple-300 hover:bg-purple-50"
+            }`}
+          >
+            <Calendar className="h-4 w-4" />
+            Filter by Date
+            {(startDate || endDate) && (
+              <span className={`ml-1 rounded-full px-2 py-0.5 text-xs bg-purple-500`}>
+                Active
+              </span>
+            )}
+          </button>
+        </div>
 
-            {/* Dropdown */}
-            {dateFilterOpen && (
-              <>
-                {/* Backdrop to close dropdown when clicking outside */}
-                <div
-                  className="fixed inset-0 z-[100]"
-                  onClick={() => setDateFilterOpen(false)}
-                />
+        {/* Date Filter Modal - Mobile & Tablet Bottom Sheet, Desktop Centered Modal */}
+        {dateFilterOpen && (
+          <div className="fixed inset-0 z-50">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/50"
+              onClick={() => setDateFilterOpen(false)}
+            />
 
-                {/* Dropdown Content */}
-                <div className="absolute top-full right-0 z-[101] mt-2 w-80 rounded-lg border border-gray-200 bg-white p-4 shadow-lg">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-gray-900">Filter by Date Range</h3>
-                    {(startDate || endDate) && (
+            {/* Mobile/Tablet: Bottom Sheet */}
+            <div className="absolute right-0 bottom-0 left-0 rounded-t-2xl bg-white shadow-2xl md:hidden">
+              {/* Handle */}
+              <div className="flex justify-center pt-3 pb-2">
+                <div className="h-1 w-12 rounded-full bg-gray-300" />
+              </div>
+
+              {/* Header */}
+              <div className="border-b border-gray-100 px-6 py-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Filter by Date Range
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      Select date range for products
+                    </p>
+                  </div>
+                  {(startDate || endDate) && (
+                    <button
+                      onClick={() => {
+                        setStartDate("");
+                        setEndDate("");
+                      }}
+                      className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+                    >
+                      Clear All
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="px-6 py-4 space-y-4">
+                <div>
+                  <label htmlFor="startDate-mobile" className="block text-sm font-medium text-gray-700 mb-2">
+                    From Date
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="startDate-mobile"
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className="flex-1 rounded-lg border border-gray-200 px-4 py-3 text-base text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    />
+                    {startDate && (
                       <button
-                        onClick={() => {
-                          setStartDate("");
-                          setEndDate("");
-                        }}
-                        className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                        onClick={() => setStartDate("")}
+                        className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                        title="Clear start date"
                       >
-                        Clear All
+                        <X className="h-5 w-5" />
                       </button>
                     )}
                   </div>
+                </div>
 
-                  <div className="space-y-3">
-                    <div>
-                      <label htmlFor="startDate" className="block text-xs font-medium text-gray-700 mb-1">
-                        From
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          id="startDate"
-                          type="date"
-                          value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
-                          className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                        />
-                        {startDate && (
-                          <button
-                            onClick={() => setStartDate("")}
-                            className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-                            title="Clear start date"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label htmlFor="endDate" className="block text-xs font-medium text-gray-700 mb-1">
-                        To
-                      </label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          id="endDate"
-                          type="date"
-                          value={endDate}
-                          onChange={(e) => setEndDate(e.target.value)}
-                          className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                        />
-                        {endDate && (
-                          <button
-                            onClick={() => setEndDate("")}
-                            className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
-                            title="Clear end date"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
+                <div>
+                  <label htmlFor="endDate-mobile" className="block text-sm font-medium text-gray-700 mb-2">
+                    To Date
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="endDate-mobile"
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className="flex-1 rounded-lg border border-gray-200 px-4 py-3 text-base text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                    />
+                    {endDate && (
+                      <button
+                        onClick={() => setEndDate("")}
+                        className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                        title="Clear end date"
+                      >
+                        <X className="h-5 w-5" />
+                      </button>
+                    )}
                   </div>
                 </div>
-              </>
-            )}
+              </div>
+
+              {/* Footer */}
+              <div className="border-t border-gray-100 px-6 py-4">
+                <button
+                  onClick={() => setDateFilterOpen(false)}
+                  className="w-full rounded-lg bg-purple-600 px-4 py-3 font-medium text-white hover:bg-purple-700 transition-colors"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+
+            {/* Desktop: Centered Modal */}
+            <div className="hidden md:flex absolute inset-0 items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+                {/* Header */}
+                <div className="border-b border-gray-100 px-6 py-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-lg font-semibold text-gray-900">
+                      Filter by Date Range
+                    </h3>
+                    <button
+                      onClick={() => setDateFilterOpen(false)}
+                      className="rounded-lg p-2 hover:bg-gray-100 transition-colors"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Select date range for products
+                  </p>
+                </div>
+
+                {/* Content */}
+                <div className="px-6 py-4 space-y-4">
+                  <div>
+                    <label htmlFor="startDate-desktop" className="block text-sm font-medium text-gray-700 mb-2">
+                      From Date
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="startDate-desktop"
+                        type="date"
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      />
+                      {startDate && (
+                        <button
+                          onClick={() => setStartDate("")}
+                          className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                          title="Clear start date"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label htmlFor="endDate-desktop" className="block text-sm font-medium text-gray-700 mb-2">
+                      To Date
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <input
+                        id="endDate-desktop"
+                        type="date"
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      />
+                      {endDate && (
+                        <button
+                          onClick={() => setEndDate("")}
+                          className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                          title="Clear end date"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {(startDate || endDate) && (
+                    <button
+                      onClick={() => {
+                        setStartDate("");
+                        setEndDate("");
+                      }}
+                      className="w-full text-sm text-purple-600 hover:text-purple-700 font-medium py-2"
+                    >
+                      Clear All Dates
+                    </button>
+                  )}
+                </div>
+
+                {/* Footer */}
+                <div className="border-t border-gray-100 px-6 py-4">
+                  <button
+                    onClick={() => setDateFilterOpen(false)}
+                    className="w-full rounded-lg bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700 transition-colors"
+                  >
+                    Apply Filter
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Products Display - Mobile Cards / Desktop Table */}
         <div className="overflow-hidden rounded-lg border border-gray-100 bg-white shadow-sm">
