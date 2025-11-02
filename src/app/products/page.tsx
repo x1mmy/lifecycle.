@@ -154,7 +154,7 @@ export default function ProductsPage() {
 
     // Format 2: MM/DD/YYYY or M/D/YYYY (US format)
     const usPattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
-    const usMatch = trimmed.match(usPattern);
+    const usMatch = usPattern.exec(trimmed);
     if (usMatch) {
       const [, month, day, year] = usMatch;
       if (month && day && year) {

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, Barcode } from "lucide-react";
 import type { Product } from "~/types";
 import { validateRequired, validatePositiveNumber } from "~/utils/validation";
@@ -23,6 +23,9 @@ interface ProductFormProps {
   onClose: () => void;
 }
 
+// Storage key for form draft (isolated per browser tab via sessionStorage)
+const FORM_DRAFT_KEY = "product-form-draft";
+
 export const ProductForm = ({
   product,
   userId,
@@ -30,20 +33,81 @@ export const ProductForm = ({
   onClose,
 }: ProductFormProps) => {
   const { toast } = useToast();
-  const [formData, setFormData] = useState({
-    name: product?.name ?? "",
-    category: product?.category ?? "",
-    expiryDate: product?.expiryDate ?? "",
-    quantity: product?.quantity ?? "",
-    batchNumber: product?.batchNumber ?? "",
-    supplier: product?.supplier ?? "",
-    location: product?.location ?? "",
-    notes: product?.notes ?? "",
+
+  /**
+   * Initialize form data with smart priority:
+   * 1. If editing existing product → Use product data
+   * 2. If adding new product → Try to restore draft from sessionStorage
+   * 3. If no draft exists → Use empty form
+   */
+  const [formData, setFormData] = useState(() => {
+    // Priority 1: If editing existing product, use product data
+    if (product) {
+      return {
+        name: product.name ?? "",
+        category: product.category ?? "",
+        expiryDate: product.expiryDate ?? "",
+        quantity: product.quantity ?? "",
+        batchNumber: product.batchNumber ?? "",
+        supplier: product.supplier ?? "",
+        location: product.location ?? "",
+        notes: product.notes ?? "",
+      };
+    }
+
+    // Priority 2: Try to restore draft from sessionStorage (only when adding new)
+    if (typeof window !== "undefined") {
+      const draft = sessionStorage.getItem(FORM_DRAFT_KEY);
+      if (draft) {
+        try {
+          const parsed = JSON.parse(draft);
+          console.log("📝 Restored form draft from sessionStorage:", parsed);
+          return parsed;
+        } catch (error) {
+          console.error("Failed to parse form draft:", error);
+          // If parsing fails, clear the corrupted data
+          sessionStorage.removeItem(FORM_DRAFT_KEY);
+        }
+      }
+    }
+
+    // Priority 3: Default empty form
+    return {
+      name: "",
+      category: "",
+      expiryDate: "",
+      quantity: "",
+      batchNumber: "",
+      supplier: "",
+      location: "",
+      notes: "",
+    };
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [barcode, setBarcode] = useState("");
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
+
+  /**
+   * Auto-save form draft to sessionStorage
+   * - Only saves when adding NEW product (not editing)
+   * - Only saves if form has actual data
+   * - Triggers on every form field change
+   */
+  useEffect(() => {
+    // Don't save draft when editing existing product
+    if (product) return;
+
+    // Only save if there's actual data in the form
+    const hasData = Object.values(formData).some(
+      (value) => value !== "" && value !== null && value !== undefined
+    );
+
+    if (hasData && typeof window !== "undefined") {
+      sessionStorage.setItem(FORM_DRAFT_KEY, JSON.stringify(formData));
+      console.log("💾 Auto-saved form draft to sessionStorage");
+    }
+  }, [formData, product]);
 
   // Use tRPC mutation for barcode lookup (server-side API call)
   const barcodeLookup = api.products.lookupBarcode.useMutation();
@@ -51,16 +115,24 @@ export const ProductForm = ({
   // Get existing categories for dropdown
   const { data: categories = [], isLoading: categoriesLoading, error: categoriesError } = api.products.getCategories.useQuery(
     { userId },
-    { enabled: !!userId },
+    {
+      enabled: !!userId,
+      retry: 2, // Retry failed requests 2 times
+      retryDelay: 1000, // Wait 1 second between retries
+      staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    },
   );
 
-  // Debug logging
-  console.log('ProductForm Debug:', {
-    userId,
-    categories,
-    categoriesLoading,
-    categoriesError
-  });
+  // Show toast on category load error (but don't block form)
+  useEffect(() => {
+    if (categoriesError) {
+      toast({
+        title: "Categories load failed",
+        description: "You can still type a category manually. Categories will be available after refresh.",
+        variant: "destructive",
+      });
+    }
+  }, [categoriesError, toast]);
 
   const handleChange = (field: string, value: string | number) => {
     if (field === "category" && value === "__new__") {
@@ -213,7 +285,28 @@ export const ProductForm = ({
       quantity: quantityValue,
     };
 
+    // Submit the form
     onSubmit(submitData);
+
+    // Clear draft from sessionStorage after successful submission
+    // (only for new products, not when editing)
+    if (!product && typeof window !== "undefined") {
+      sessionStorage.removeItem(FORM_DRAFT_KEY);
+      console.log("🗑️ Cleared form draft from sessionStorage");
+    }
+  };
+
+  /**
+   * Handle form close/cancel
+   * Clears sessionStorage draft when user explicitly cancels
+   * (but draft is preserved during tab switches via auto-save)
+   */
+  const handleClose = () => {
+    if (!product && typeof window !== "undefined") {
+      sessionStorage.removeItem(FORM_DRAFT_KEY);
+      console.log("🗑️ Cleared form draft from sessionStorage (user cancelled)");
+    }
+    onClose();
   };
 
   return (
@@ -225,7 +318,7 @@ export const ProductForm = ({
             {product ? "Edit Product" : "Add New Product"}
           </h2>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             className="hover:bg-accent rounded-lg p-2 transition-colors"
             type="button"
           >
@@ -335,15 +428,15 @@ export const ProductForm = ({
                       </SelectItem>
                     )}
 
-                    {/* Error state */}
+                    {/* Error state - Show helpful message but allow manual entry */}
                     {categoriesError && (
                       <SelectItem value="__error__" disabled>
-                        Error loading categories
+                        Error loading - Click &quot;+ Add new category&quot; to enter manually
                       </SelectItem>
                     )}
 
-                    {/* Existing categories */}
-                    {!categoriesLoading && !categoriesError && categories
+                    {/* Existing categories - Show even if there was an error (might be cached) */}
+                    {!categoriesLoading && categories
                       .filter((category: string) => category && category.trim() !== "") // Filter out empty/invalid categories
                       .map((category: string) => (
                         <SelectItem
@@ -456,7 +549,7 @@ export const ProductForm = ({
             <Button type="submit" className="flex-1">
               {product ? "Update Product" : "Add Product"}
             </Button>
-            <Button type="button" variant="outline" onClick={onClose}>
+            <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
           </div>
