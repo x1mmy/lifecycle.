@@ -15,6 +15,8 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertCircle,
+  Calendar,
+  X,
 } from "lucide-react";
 import { useSupabaseAuth } from "~/hooks/useSupabaseAuth";
 import { supabase } from "~/lib/supabase";
@@ -83,6 +85,15 @@ export default function ProductsPage() {
   );
 
   /**
+   * Date Range Filter State
+   * Allows users to filter products by expiry date range
+   * - startDate: Filter products expiring on or after this date
+   * - endDate: Filter products expiring on or before this date
+   */
+  const [startDate, setStartDate] = useState<string>("");
+  const [endDate, setEndDate] = useState<string>("");
+
+  /**
    * Filter State
    * Allows users to quickly view products by status:
    * - all: Show all products
@@ -118,6 +129,60 @@ export default function ProductsPage() {
 
   // Mobile Sort Picker State
   const [sortPickerOpen, setSortPickerOpen] = useState(false);
+
+  // Date Filter Dropdown State
+  const [dateFilterOpen, setDateFilterOpen] = useState(false);
+
+  /**
+   * Parse date string from search term
+   * Detects various date formats and converts them to YYYY-MM-DD
+   * Returns null if the string doesn't match a date pattern
+   */
+  const parseDateFromSearch = (searchTerm: string): string | null => {
+    // Remove whitespace
+    const trimmed = searchTerm.trim();
+
+    // Try to parse common date formats
+    // Format 1: YYYY-MM-DD (standard format)
+    const isoPattern = /^\d{4}-\d{2}-\d{2}$/;
+    if (isoPattern.test(trimmed)) {
+      const date = new Date(trimmed);
+      if (!isNaN(date.getTime())) {
+        return trimmed;
+      }
+    }
+
+    // Format 2: MM/DD/YYYY or M/D/YYYY (US format)
+    const usPattern = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+    const usMatch = trimmed.match(usPattern);
+    if (usMatch) {
+      const [, month, day, year] = usMatch;
+      if (month && day && year) {
+        const monthInt = parseInt(month, 10);
+        const dayInt = parseInt(day, 10);
+        const yearInt = parseInt(year, 10);
+        if (monthInt >= 1 && monthInt <= 12 && dayInt >= 1 && dayInt <= 31) {
+          const date = new Date(yearInt, monthInt - 1, dayInt);
+          if (!isNaN(date.getTime())) {
+            // Format as YYYY-MM-DD
+            const formattedMonth = monthInt.toString().padStart(2, "0");
+            const formattedDay = dayInt.toString().padStart(2, "0");
+            return `${yearInt}-${formattedMonth}-${formattedDay}`;
+          }
+        }
+      }
+    }
+
+    // Format 3: Try to parse as a natural date string
+    const naturalDate = new Date(trimmed);
+    if (!isNaN(naturalDate.getTime()) && trimmed.length > 5) {
+      // If it's a valid date and not just numbers
+      const isoString = naturalDate.toISOString().split("T");
+      return isoString[0] ?? null;
+    }
+
+    return null;
+  };
 
   // Sort options for mobile picker
   const sortOptions = [
@@ -228,12 +293,26 @@ export default function ProductsPage() {
 
     // Step 1: Apply search filter across multiple fields
     if (searchTerm.trim() !== "") {
-      result = result.filter(
-        (product) =>
-          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.batchNumber?.toLowerCase().includes(searchTerm.toLowerCase()),
-      );
+      // Check if search term is a date
+      const parsedDate = parseDateFromSearch(searchTerm);
+      if (parsedDate) {
+        // If it's a date, filter by expiry date match
+        result = result.filter((product) => {
+          const expiryDate = new Date(product.expiryDate);
+          expiryDate.setHours(0, 0, 0, 0);
+          const searchDate = new Date(parsedDate);
+          searchDate.setHours(0, 0, 0, 0);
+          return expiryDate.getTime() === searchDate.getTime();
+        });
+      } else {
+        // Otherwise, search across name, category, and batch number
+        result = result.filter(
+          (product) =>
+            product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            product.batchNumber?.toLowerCase().includes(searchTerm.toLowerCase()),
+        );
+      }
     }
 
     // Step 2: Apply status filter based on expiry date
@@ -253,7 +332,35 @@ export default function ProductsPage() {
       });
     }
 
-    // Step 3: Apply sorting
+    // Step 3: Apply date range filter
+    if (startDate || endDate) {
+      result = result.filter((product) => {
+        const expiryDate = new Date(product.expiryDate);
+        expiryDate.setHours(0, 0, 0, 0);
+
+        // Filter by start date (products expiring on or after startDate)
+        if (startDate) {
+          const start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+          if (expiryDate < start) {
+            return false;
+          }
+        }
+
+        // Filter by end date (products expiring on or before endDate)
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(0, 0, 0, 0);
+          if (expiryDate > end) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+    }
+
+    // Step 4: Apply sorting
     result.sort((a, b) => {
       let aVal: string | number;
       let bVal: string | number;
@@ -291,7 +398,7 @@ export default function ProductsPage() {
     });
 
     return result;
-  }, [products, searchTerm, activeFilter, sortField, sortDirection]);
+  }, [products, searchTerm, activeFilter, startDate, endDate, sortField, sortDirection]);
 
   /**
    * Pagination Calculations
@@ -307,25 +414,57 @@ export default function ProductsPage() {
   // Reset to page 1 when filters/sort/pageSize change (prevents empty page scenarios)
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, activeFilter, sortField, sortDirection, pageSize]);
+  }, [searchTerm, activeFilter, startDate, endDate, sortField, sortDirection, pageSize]);
 
   /**
    * Filter Counts
    * Calculates the number of products in each status category
    * Used to display badges on filter buttons
+   * Takes into account the date range filter if active
    */
   const filterCounts = useMemo(() => {
+    // First apply date range filter if active
+    let dateFilteredProducts = products;
+
+    if (startDate || endDate) {
+      dateFilteredProducts = products.filter((product) => {
+        const expiryDate = new Date(product.expiryDate);
+        expiryDate.setHours(0, 0, 0, 0);
+
+        // Filter by start date (products expiring on or after startDate)
+        if (startDate) {
+          const start = new Date(startDate);
+          start.setHours(0, 0, 0, 0);
+          if (expiryDate < start) {
+            return false;
+          }
+        }
+
+        // Filter by end date (products expiring on or before endDate)
+        if (endDate) {
+          const end = new Date(endDate);
+          end.setHours(0, 0, 0, 0);
+          if (expiryDate > end) {
+            return false;
+          }
+        }
+
+        return true;
+      });
+    }
+
+    // Then calculate counts from date-filtered products
     return {
-      all: products.length,
-      expired: products.filter((p) => getDaysUntilExpiry(p.expiryDate) < 0)
+      all: dateFilteredProducts.length,
+      expired: dateFilteredProducts.filter((p) => getDaysUntilExpiry(p.expiryDate) < 0)
         .length,
-      "expiring-soon": products.filter((p) => {
+      "expiring-soon": dateFilteredProducts.filter((p) => {
         const days = getDaysUntilExpiry(p.expiryDate);
         return days >= 0 && days <= 7;
       }).length,
-      good: products.filter((p) => getDaysUntilExpiry(p.expiryDate) > 7).length,
+      good: dateFilteredProducts.filter((p) => getDaysUntilExpiry(p.expiryDate) > 7).length,
     };
-  }, [products]);
+  }, [products, startDate, endDate]);
 
   /**
    * Handle Sort Column Click
@@ -644,6 +783,105 @@ export default function ProductsPage() {
               {filterCounts.good}
             </span>
           </button>
+
+          {/* Date Filter Button with Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setDateFilterOpen(!dateFilterOpen)}
+              className={`rounded-full px-4 py-2 text-sm font-medium transition-all flex items-center gap-2 ${
+                startDate || endDate
+                  ? "bg-purple-600 text-white shadow-md"
+                  : "border border-gray-200 bg-white text-gray-700 hover:border-purple-300 hover:bg-purple-50"
+              }`}
+            >
+              <Calendar className="h-4 w-4" />
+              Filter by Date
+              {(startDate || endDate) && (
+                <span className={`ml-1 rounded-full px-2 py-0.5 text-xs bg-purple-500`}>
+                  Active
+                </span>
+              )}
+            </button>
+
+            {/* Dropdown */}
+            {dateFilterOpen && (
+              <>
+                {/* Backdrop to close dropdown when clicking outside */}
+                <div
+                  className="fixed inset-0 z-[100]"
+                  onClick={() => setDateFilterOpen(false)}
+                />
+
+                {/* Dropdown Content */}
+                <div className="absolute top-full right-0 z-[101] mt-2 w-80 rounded-lg border border-gray-200 bg-white p-4 shadow-lg">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-gray-900">Filter by Date Range</h3>
+                    {(startDate || endDate) && (
+                      <button
+                        onClick={() => {
+                          setStartDate("");
+                          setEndDate("");
+                        }}
+                        className="text-xs text-purple-600 hover:text-purple-700 font-medium"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label htmlFor="startDate" className="block text-xs font-medium text-gray-700 mb-1">
+                        From
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="startDate"
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                          className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        />
+                        {startDate && (
+                          <button
+                            onClick={() => setStartDate("")}
+                            className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                            title="Clear start date"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor="endDate" className="block text-xs font-medium text-gray-700 mb-1">
+                        To
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="endDate"
+                          type="date"
+                          value={endDate}
+                          onChange={(e) => setEndDate(e.target.value)}
+                          className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        />
+                        {endDate && (
+                          <button
+                            onClick={() => setEndDate("")}
+                            className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                            title="Clear end date"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Products Display - Mobile Cards / Desktop Table */}

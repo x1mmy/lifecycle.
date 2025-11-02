@@ -25,10 +25,11 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
   const cardRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Detect if we're on mobile (screen width < 768px = md breakpoint)
+  // Detect if we're on mobile or tablet (screen width < 1024px = lg breakpoint)
+  // This includes phones and tablets in both portrait and landscape modes
   useEffect(() => {
     const checkIsMobile = () => {
-      setIsMobile(window.innerWidth < 768);
+      setIsMobile(window.innerWidth < 1024);
     };
 
     checkIsMobile();
@@ -124,10 +125,10 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
 
   return (
     <>
-      {/* Mobile: Swipeable Card */}
-      <div ref={containerRef} className="relative overflow-hidden md:overflow-visible rounded-lg">
-        {/* Edit button revealed on swipe right (mobile only) */}
-        <div className="absolute left-0 top-0 bottom-0 w-24 bg-amber-500 flex items-center justify-center md:hidden">
+      {/* Mobile & Tablet: Swipeable Card */}
+      <div ref={containerRef} className="relative overflow-hidden lg:overflow-visible rounded-lg">
+        {/* Edit button revealed on swipe right (mobile & tablet only) */}
+        <div className="absolute left-0 top-0 bottom-0 w-24 bg-amber-500 flex items-center justify-center lg:hidden">
           <button
             onClick={() => setShowQuantityModal(true)}
             className="flex flex-col items-center justify-center text-white h-full w-full"
@@ -137,8 +138,8 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
           </button>
         </div>
 
-        {/* Delete button revealed on swipe left (mobile only) */}
-        <div className="absolute right-0 top-0 bottom-0 w-24 bg-red-600 flex items-center justify-center md:hidden">
+        {/* Delete button revealed on swipe left (mobile & tablet only) */}
+        <div className="absolute right-0 top-0 bottom-0 w-24 bg-red-600 flex items-center justify-center lg:hidden">
           <button
             onClick={() => setShowDeleteConfirm(true)}
             className="flex flex-col items-center justify-center text-white h-full w-full"
@@ -152,7 +153,7 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
         <div
           ref={cardRef}
           {...bind()}
-          className={`flex items-start gap-3 p-3 rounded-lg ${bgColor} border ${borderColor} relative group touch-pan-y md:touch-auto transition-transform`}
+          className={`flex items-start gap-3 p-3 rounded-lg ${bgColor} border ${borderColor} relative group touch-pan-y lg:touch-auto transition-transform`}
           style={{
             transform: `translateX(${swipeOffset}px)`,
             transition: swipeOffset === 0 || Math.abs(swipeOffset) === 100 ? 'transform 0.3s ease-out' : 'none',
@@ -176,7 +177,7 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
           </div>
 
           {/* Desktop: Action Buttons (visible on hover) */}
-          <div className="hidden md:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="hidden lg:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             {/* Update Quantity Button */}
             <button
               onClick={() => setShowQuantityModal(true)}
