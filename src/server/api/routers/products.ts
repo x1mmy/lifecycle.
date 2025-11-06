@@ -85,6 +85,7 @@ const productInputSchema = z.object({
   supplier: z.string().optional(),
   location: z.string().optional(),
   notes: z.string().optional(),
+  barcode: z.string().optional(),
 });
 
 export const productsRouter = createTRPCRouter({
@@ -160,6 +161,7 @@ export const productsRouter = createTRPCRouter({
             supplier: input.product.supplier,
             location: input.product.location,
             notes: input.product.notes,
+            barcode: input.product.barcode,
           })
           .select()
           .single();
@@ -215,6 +217,7 @@ export const productsRouter = createTRPCRouter({
             supplier: input.product.supplier,
             location: input.product.location,
             notes: input.product.notes,
+            barcode: input.product.barcode,
           })
           .eq("id", input.productId)
           .eq("user_id", input.userId) // RLS protection
