@@ -134,6 +134,7 @@ export const productsRouter = createTRPCRouter({
    * Create Product
    *
    * Adds a new product to the database
+   * If barcode exists, also saves to shared barcode_cache for future lookups
    * Validates input and enforces business rules
    *
    * @input userId - The authenticated user's ID
@@ -149,6 +150,9 @@ export const productsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
+        // ═══════════════════════════════════════════════════════════
+        // STEP 1: Save to products table (user's inventory)
+        // ═══════════════════════════════════════════════════════════
         const response = await supabaseAdmin
           .from("products")
           .insert({
@@ -173,6 +177,39 @@ export const productsRouter = createTRPCRouter({
             message: "Failed to create product",
           });
         }
+        console.log("🔍 [Debug] Barcode value:", input.product.barcode, "Name:", input.product.name);
+        // ═══════════════════════════════════════════════════════════
+        // STEP 2: Save to barcode_cache (shared lookup cache)
+        // Only if barcode exists and has required fields
+        // First come first serve - ON CONFLICT DO NOTHING
+        // ═══════════════════════════════════════════════════════════
+        if (input.product.barcode && input.product.name) {
+          try {
+            const { error: cacheError } = await supabaseAdmin
+              .from("barcode_cache")
+              .insert({
+                barcode: input.product.barcode.trim(),
+                name: input.product.name,
+                supplier: input.product.supplier ?? null,
+                category: input.product.category ?? null,
+              })
+              .select()
+              .single();
+
+            // Ignore duplicate errors (barcode already in cache - first come first serve)
+            if (cacheError && cacheError.code === "23505") {
+              console.log("ℹ️ [Barcode already cached]", input.product.barcode);
+            } else if (cacheError) {
+              console.error("[Barcode cache insert error]", cacheError);
+              // Don't fail the whole operation, just log it
+            } else {
+              console.log("✅ [Added to barcode cache]", input.product.barcode);
+            }
+          } catch (cacheError) {
+            console.error("[Barcode cache error]", cacheError);
+            // Don't fail product creation if cache insert fails
+          }
+        }
 
         return response.data as ProductRow;
       } catch (error) {
@@ -189,6 +226,7 @@ export const productsRouter = createTRPCRouter({
    * Update Product
    *
    * Updates an existing product
+   * If barcode is added/changed, syncs to shared barcode_cache
    * Validates input and checks ownership via RLS
    *
    * @input productId - ID of product to update
@@ -206,6 +244,9 @@ export const productsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
+        // ═══════════════════════════════════════════════════════════
+        // STEP 1: Update product in products table
+        // ═══════════════════════════════════════════════════════════
         const response = await supabaseAdmin
           .from("products")
           .update({
@@ -237,6 +278,38 @@ export const productsRouter = createTRPCRouter({
             code: "NOT_FOUND",
             message: "Product not found or access denied",
           });
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // STEP 2: Sync to barcode_cache (if barcode was added/changed)
+        // This handles cases where user adds barcode to existing product
+        // ═══════════════════════════════════════════════════════════
+        if (input.product.barcode && input.product.name) {
+          try {
+            const { error: cacheError } = await supabaseAdmin
+              .from("barcode_cache")
+              .insert({
+                barcode: input.product.barcode.trim(),
+                name: input.product.name,
+                supplier: input.product.supplier ?? null,
+                category: input.product.category ?? null,
+              })
+              .select()
+              .single();
+
+            // Ignore duplicate errors (barcode already in cache - first come first serve)
+            if (cacheError && cacheError.code === "23505") {
+              console.log("ℹ️ [Barcode already cached]", input.product.barcode);
+            } else if (cacheError) {
+              console.error("[Barcode cache insert error]", cacheError);
+              // Don't fail the whole operation, just log it
+            } else {
+              console.log("✅ [Added to barcode cache on update]", input.product.barcode);
+            }
+          } catch (cacheError) {
+            console.error("[Barcode cache error]", cacheError);
+            // Don't fail product update if cache insert fails
+          }
         }
 
         return response.data as ProductRow;
@@ -297,11 +370,15 @@ export const productsRouter = createTRPCRouter({
   /**
    * Barcode Lookup Endpoint
    *
-   * Calls Open Food Facts API to retrieve product information
+   * Implements cache-first lookup strategy:
+   * 1. Check barcode_cache table (our database) - FAST
+   * 2. If not cached, call Open Food Facts API - SLOW
+   * 3. If not found anywhere, user enters manually
+   *
    * Server-side implementation provides:
    * - Better security (API calls not exposed to client)
    * - Centralized error handling
-   * - Ability to add caching/rate limiting later
+   * - Community-shared product cache
    * - Can easily switch to different barcode APIs
    *
    * @input barcode - The product barcode/UPC to lookup
@@ -314,12 +391,44 @@ export const productsRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input }) => {
-      const { barcode } = input;
+      const barcode = input.barcode.trim();
 
+      // ═══════════════════════════════════════════════════════════
+      // STEP 1: Check barcode_cache table (our database)
+      // ═══════════════════════════════════════════════════════════
       try {
-        // Call Open Food Facts API
+        const { data: cachedProduct, error: cacheError } = await supabaseAdmin
+          .from("barcode_cache")
+          .select("barcode, name, supplier, category")
+          .eq("barcode", barcode)
+          .maybeSingle();
+
+        if (cachedProduct && !cacheError) {
+          console.log("✅ [Barcode Cache Hit]", barcode);
+          return {
+            found: true,
+            data: {
+              name: cachedProduct.name,
+              category: cachedProduct.category ?? null,
+              supplier: cachedProduct.supplier ?? null,
+            },
+            source: "cache",
+            message: "Product found in cache",
+          };
+        }
+
+        console.log("⚠️ [Barcode Cache Miss]", barcode, "- trying API");
+      } catch (error) {
+        console.error("[Barcode Cache Error]", error);
+        // Continue to API lookup even if cache fails
+      }
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 2: Cache miss → Check Open Food Facts API
+      // ═══════════════════════════════════════════════════════════
+      try {
         const response = await fetch(
-          `https://world.openfoodfacts.org/api/v0/product/${barcode.trim()}.json`,
+          `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`,
         );
 
         if (!response.ok) {
@@ -329,42 +438,41 @@ export const productsRouter = createTRPCRouter({
         const data = (await response.json()) as BarcodeLookupResponse;
 
         // Check if product was found
-        if (data.status !== 1 || !data.product) {
+        if (data.status === 1 && data.product) {
+          const productData = data.product;
+          console.log("✅ [Barcode API Hit]", barcode);
+
+          // Extract and format product information
+          const result = {
+            name: productData.product_name ?? null,
+            category: productData.categories
+              ? (productData.categories.split(",")[0]?.trim() ?? null)
+              : null,
+            supplier: productData.brands ?? null,
+          };
+
           return {
-            found: false,
-            data: null,
-            message: "Product not found in database",
+            found: true,
+            data: result,
+            source: "api",
+            message: "Product found in Open Food Facts API",
           };
         }
-
-        const productData = data.product;
-
-        // Extract and format product information
-        const result = {
-          name: productData.product_name ?? null,
-          category: productData.categories
-            ? (productData.categories.split(",")[0]?.trim() ?? null)
-            : null,
-          supplier: productData.brands ?? null,
-        };
-
-        return {
-          found: true,
-          data: result,
-          message: "Product found successfully",
-        };
       } catch (error) {
-        // Log error on server for debugging
-        console.error("[Barcode Lookup Error]", error);
-
-        // Return user-friendly error
-        return {
-          found: false,
-          data: null,
-          message:
-            "Failed to lookup barcode. Please try again or enter details manually.",
-        };
+        console.error("[Barcode API Error]", error);
+        // Continue to not found
       }
+
+      // ═══════════════════════════════════════════════════════════
+      // STEP 3: Not found in cache or API
+      // ═══════════════════════════════════════════════════════════
+      console.log("❌ [Barcode Not Found]", barcode);
+      return {
+        found: false,
+        data: null,
+        source: null,
+        message: "Product not found in database or API",
+      };
     }),
 
   /**

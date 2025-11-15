@@ -540,6 +540,7 @@ export default function ProductsPage() {
             supplier: productData.supplier,
             location: productData.location,
             notes: productData.notes,
+            barcode: productData.barcode,
           },
         });
 
@@ -560,6 +561,7 @@ export default function ProductsPage() {
             supplier: productData.supplier,
             location: productData.location,
             notes: productData.notes,
+            barcode: productData.barcode,
           },
         });
 

@@ -217,15 +217,14 @@ export const ProductForm = ({
             description: `Found "${result.data.name ?? "product"}" - Form fields have been auto-filled.`,
           });
 
-          // Clear barcode input
-          setBarcode("");
+          // Keep barcode visible so it gets saved with the product
         } else {
           // Product found but no new info to add
           toast({
             title: "Product already filled",
             description: "Product found but form already has this information.",
           });
-          setBarcode("");
+          // Keep barcode visible so it gets saved with the product
         }
       } else {
         // Product not found in database
@@ -318,6 +317,11 @@ export const ProductForm = ({
         quantityValue = formData.quantity;
       }
     }
+
+    //DEBUGGING CODE
+    //console.log("🔍 [Frontend Debug] Barcode state before submit:", barcode);
+    //console.log("🔍 [Frontend Debug] Barcode trimmed:", barcode.trim());
+
 
     const submitData: Omit<Product, "id" | "addedDate"> = {
       name: formData.name,
