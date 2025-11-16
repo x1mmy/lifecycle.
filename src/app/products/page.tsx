@@ -218,6 +218,7 @@ export default function ProductsPage() {
    * All data modifications go through backend API for validation and business logic
    * After mutations, we call loadUserProducts() to refresh the data
    */
+  const utils = api.useUtils(); // Get tRPC utils for cache invalidation
   const createProductMutation = api.products.create.useMutation();
   const updateProductMutation = api.products.update.useMutation();
   const deleteProductMutation = api.products.delete.useMutation();
@@ -570,6 +571,9 @@ export default function ProductsPage() {
           description: "The product has been added successfully.",
         });
       }
+
+      // Invalidate categories cache to refresh dropdown with any new categories
+      await utils.products.getCategories.invalidate({ userId: user.id });
 
       // Reload products from client-side and close form
       await loadUserProducts();
