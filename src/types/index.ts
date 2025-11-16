@@ -16,6 +16,7 @@ export interface Product {
     supplier?: string;
     location?: string;
     notes?: string;
+    barcode?: string;
     addedDate: string;
 }
 

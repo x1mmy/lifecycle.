@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Barcode } from "lucide-react";
+import { X, Barcode, Camera } from "lucide-react";
 import type { Product } from "~/types";
 import { validateRequired, validatePositiveNumber } from "~/utils/validation";
 import { Button } from "~/components/ui/button";
@@ -15,12 +15,25 @@ import {
 } from "~/components/ui/select";
 import { useToast } from "~/hooks/use-toast";
 import { api } from "~/trpc/react";
+import { BarcodeScanner } from "./BarcodeScanner";
 
 interface ProductFormProps {
   product?: Product;
   userId: string;
   onSubmit: (product: Omit<Product, "id" | "addedDate">) => void;
   onClose: () => void;
+}
+
+// Form data type
+interface ProductFormData {
+  name: string;
+  category: string;
+  expiryDate: string;
+  quantity: string | number;
+  batchNumber: string;
+  supplier: string;
+  location: string;
+  notes: string;
 }
 
 // Storage key for form draft (isolated per browser tab via sessionStorage)
@@ -40,7 +53,7 @@ export const ProductForm = ({
    * 2. If adding new product → Try to restore draft from sessionStorage
    * 3. If no draft exists → Use empty form
    */
-  const [formData, setFormData] = useState(() => {
+  const [formData, setFormData] = useState<ProductFormData>(() => {
     // Priority 1: If editing existing product, use product data
     if (product) {
       return {
@@ -60,7 +73,7 @@ export const ProductForm = ({
       const draft = sessionStorage.getItem(FORM_DRAFT_KEY);
       if (draft) {
         try {
-          const parsed = JSON.parse(draft);
+          const parsed = JSON.parse(draft) as ProductFormData;
           console.log("📝 Restored form draft from sessionStorage:", parsed);
           return parsed;
         } catch (error) {
@@ -85,8 +98,16 @@ export const ProductForm = ({
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [barcode, setBarcode] = useState("");
+  const [barcode, setBarcode] = useState<string>("");
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  // Initialize barcode from product when editing
+  useEffect(() => {
+    if (product?.barcode && typeof product.barcode === 'string') {
+      setBarcode(product.barcode);
+    }
+  }, [product]);
 
   /**
    * Auto-save form draft to sessionStorage
@@ -196,15 +217,14 @@ export const ProductForm = ({
             description: `Found "${result.data.name ?? "product"}" - Form fields have been auto-filled.`,
           });
 
-          // Clear barcode input
-          setBarcode("");
+          // Keep barcode visible so it gets saved with the product
         } else {
           // Product found but no new info to add
           toast({
             title: "Product already filled",
             description: "Product found but form already has this information.",
           });
-          setBarcode("");
+          // Keep barcode visible so it gets saved with the product
         }
       } else {
         // Product not found in database
@@ -235,6 +255,24 @@ export const ProductForm = ({
       e.preventDefault();
       void lookupBarcode(barcode);
     }
+  };
+
+  /**
+   * Handle barcode scanned from camera
+   * Auto-fills the barcode input and triggers lookup
+   */
+  const handleBarcodeScanned = (scannedBarcode: string) => {
+    console.log("Barcode scanned from camera:", scannedBarcode);
+    setBarcode(scannedBarcode);
+
+    // Automatically trigger lookup
+    void lookupBarcode(scannedBarcode);
+
+    // Show success toast
+    toast({
+      title: "Barcode scanned!",
+      description: `Scanned: ${scannedBarcode}`,
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -280,9 +318,21 @@ export const ProductForm = ({
       }
     }
 
-    const submitData = {
-      ...formData,
+    //DEBUGGING CODE
+    //console.log("🔍 [Frontend Debug] Barcode state before submit:", barcode);
+    //console.log("🔍 [Frontend Debug] Barcode trimmed:", barcode.trim());
+
+
+    const submitData: Omit<Product, "id" | "addedDate"> = {
+      name: formData.name,
+      category: formData.category,
+      expiryDate: formData.expiryDate,
       quantity: quantityValue,
+      batchNumber: formData.batchNumber || undefined,
+      supplier: formData.supplier || undefined,
+      location: formData.location || undefined,
+      notes: formData.notes || undefined,
+      barcode: barcode.trim() ? barcode.trim() : undefined, // Include barcode if present
     };
 
     // Submit the form
@@ -351,6 +401,15 @@ export const ProductForm = ({
               />
               <Button
                 type="button"
+                onClick={() => setIsScannerOpen(true)}
+                variant="outline"
+                className="shrink-0"
+                title="Scan with camera"
+              >
+                <Camera className="h-4 w-4" />
+              </Button>
+              <Button
+                type="button"
                 onClick={() => lookupBarcode(barcode)}
                 disabled={barcodeLookup.isPending || !barcode.trim()}
                 variant="outline"
@@ -359,6 +418,13 @@ export const ProductForm = ({
               </Button>
             </div>
           </div>
+
+          {/* Barcode Scanner Modal */}
+          <BarcodeScanner
+            open={isScannerOpen}
+            onClose={() => setIsScannerOpen(false)}
+            onScan={handleBarcodeScanned}
+          />
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="md:col-span-2">
