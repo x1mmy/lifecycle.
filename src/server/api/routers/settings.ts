@@ -46,6 +46,13 @@ interface SettingsRow {
   updated_at: string;
 }
 
+interface CategoryProductSummary {
+  id: string;
+  name: string;
+  expiryDate: string;
+  quantity: number | null;
+}
+
 /**
  * Supabase Error Type
  */
@@ -54,6 +61,75 @@ interface SupabaseError {
   details?: string;
   hint?: string;
   code?: string;
+}
+
+/**
+ * Helper to synchronize categories table with unique product categories
+ */
+async function syncCategoriesFromProducts(userId: string): Promise<void> {
+  try {
+    const [
+      { data: existingCategories },
+      { data: productCategories, error: productsError },
+    ] = await Promise.all([
+      supabaseAdmin.from("categories").select("name").eq("user_id", userId),
+      supabaseAdmin.from("products").select("category").eq("user_id", userId),
+    ]);
+
+    if (productsError || !productCategories) {
+      if (productsError) {
+        console.error(
+          "[Settings syncCategoriesFromProducts Error]",
+          productsError,
+        );
+      }
+      return;
+    }
+
+    const existingSet = new Set(
+      (existingCategories ?? [])
+        .map((cat) => cat.name?.trim().toLowerCase())
+        .filter((name): name is string => !!name),
+    );
+
+    const categoriesToInsert = Array.from(
+      new Set(
+        productCategories
+          .map((product) => product.category?.trim())
+          .filter(
+            (name): name is string =>
+              !!name && name !== "-" && !existingSet.has(name.toLowerCase()),
+          ),
+      ),
+    );
+
+    if (categoriesToInsert.length === 0) {
+      return;
+    }
+
+    const records = categoriesToInsert.map((name) => ({
+      user_id: userId,
+      name,
+      description: null,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error: insertError } = await supabaseAdmin
+      .from("categories")
+      .insert(records);
+
+    if (insertError) {
+      console.error(
+        "[Settings syncCategoriesFromProducts Insert Error]",
+        insertError,
+      );
+    }
+  } catch (error) {
+    console.error(
+      "[Settings syncCategoriesFromProducts Unexpected Error]",
+      error,
+    );
+  }
 }
 
 /**
@@ -72,7 +148,11 @@ const profileUpdateSchema = z.object({
  */
 const notificationPreferencesSchema = z.object({
   dailyExpiryAlerts: z.boolean(),
-  alertThreshold: z.number().int().min(1).max(365, "Alert threshold must be between 1-365 days"),
+  alertThreshold: z
+    .number()
+    .int()
+    .min(1)
+    .max(365, "Alert threshold must be between 1-365 days"),
   weeklyReport: z.boolean(),
 });
 
@@ -89,7 +169,7 @@ export const settingsRouter = createTRPCRouter({
    * Get User Profile
    *
    * Retrieves the user's business profile information
-   * 
+   *
    * tRPC Pattern Explanation:
    * - .input() defines what data the client must send
    * - .query() indicates this is a read operation
@@ -108,12 +188,15 @@ export const settingsRouter = createTRPCRouter({
     .query(async ({ input }) => {
       try {
         // Query the profiles table for the specific user
-        const result = await supabaseAdmin
+        const result = (await supabaseAdmin
           .from("profiles")
           .select("*")
           .eq("id", input.userId)
-          .single() as { data: ProfileRow | null; error: SupabaseError | null };
-        
+          .single()) as {
+          data: ProfileRow | null;
+          error: SupabaseError | null;
+        };
+
         const data = result.data as Record<string, unknown> | null;
         const error = result.error;
 
@@ -127,7 +210,6 @@ export const settingsRouter = createTRPCRouter({
 
         // Return the profile data with proper typing
         return data as unknown as ProfileRow;
-
       } catch (error) {
         console.error("[Settings getProfile Error]", error);
         if (error instanceof TRPCError) throw error;
@@ -143,7 +225,7 @@ export const settingsRouter = createTRPCRouter({
    *
    * Updates the user's business profile information
    * Note: Email updates are handled separately via Supabase Auth
-   * 
+   *
    * tRPC Pattern Explanation:
    * - .mutation() indicates this modifies data
    * - Input validation ensures data integrity
@@ -164,7 +246,7 @@ export const settingsRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       try {
         // Step 1: Update the profile in the database
-        const result = await supabaseAdmin
+        const result = (await supabaseAdmin
           .from("profiles")
           .update({
             business_name: input.profile.businessName,
@@ -173,8 +255,11 @@ export const settingsRouter = createTRPCRouter({
           })
           .eq("id", input.userId) // WHERE clause to target specific user
           .select() // Return the updated data
-          .single() as { data: ProfileRow | null; error: SupabaseError | null };
-        
+          .single()) as {
+          data: ProfileRow | null;
+          error: SupabaseError | null;
+        };
+
         const data = result.data as Record<string, unknown> | null;
         const error = result.error;
 
@@ -195,16 +280,14 @@ export const settingsRouter = createTRPCRouter({
 
         // Step 2: Update the user's metadata in Supabase Auth
         // This ensures the header shows the updated business name immediately
-        const { error: authError } = await supabaseAdmin.auth.admin.updateUserById(
-          input.userId,
-          {
+        const { error: authError } =
+          await supabaseAdmin.auth.admin.updateUserById(input.userId, {
             user_metadata: {
               business_name: input.profile.businessName,
               phone: input.profile.phone,
               address: input.profile.address,
-            }
-          }
-        );
+            },
+          });
 
         if (authError) {
           console.error("[Settings updateProfile Auth Error]", authError);
@@ -227,7 +310,7 @@ export const settingsRouter = createTRPCRouter({
    * Get Notification Preferences
    *
    * Retrieves the user's email notification settings
-   * 
+   *
    * tRPC Pattern Explanation:
    * - Similar to getProfile but queries settings table
    * - Uses .single() since each user has exactly one settings record
@@ -244,12 +327,15 @@ export const settingsRouter = createTRPCRouter({
     )
     .query(async ({ input }) => {
       try {
-        const result = await supabaseAdmin
+        const result = (await supabaseAdmin
           .from("settings")
           .select("*")
           .eq("user_id", input.userId)
-          .single() as { data: SettingsRow | null; error: SupabaseError | null };
-        
+          .single()) as {
+          data: SettingsRow | null;
+          error: SupabaseError | null;
+        };
+
         const data = result.data as Record<string, unknown> | null;
         const error = result.error;
 
@@ -276,7 +362,7 @@ export const settingsRouter = createTRPCRouter({
    * Update Notification Preferences
    *
    * Updates the user's email notification settings for the new two-tier system
-   * 
+   *
    * tRPC Pattern Explanation:
    * - .mutation() for data modification
    * - Input validation ensures valid notification settings
@@ -297,7 +383,7 @@ export const settingsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
-        const result = await supabaseAdmin
+        const result = (await supabaseAdmin
           .from("settings")
           .update({
             daily_expiry_alerts_enabled: input.preferences.dailyExpiryAlerts,
@@ -306,13 +392,19 @@ export const settingsRouter = createTRPCRouter({
           })
           .eq("user_id", input.userId)
           .select()
-          .single() as { data: SettingsRow | null; error: SupabaseError | null };
-        
+          .single()) as {
+          data: SettingsRow | null;
+          error: SupabaseError | null;
+        };
+
         const data = result.data as Record<string, unknown> | null;
         const error = result.error;
 
         if (error) {
-          console.error("[Settings updateNotificationPreferences Error]", error);
+          console.error(
+            "[Settings updateNotificationPreferences Error]",
+            error,
+          );
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Failed to update notification preferences",
@@ -342,7 +434,7 @@ export const settingsRouter = createTRPCRouter({
    *
    * Initiates Supabase's built-in password reset flow
    * Sends an email with a magic link for password reset
-   * 
+   *
    * tRPC Pattern Explanation:
    * - .mutation() for initiating the reset process
    * - Uses Supabase Auth API directly (not database)
@@ -362,8 +454,8 @@ export const settingsRouter = createTRPCRouter({
           {
             // Redirect URL after user clicks the reset link
             // This should point to your app's password reset page
-            redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000'}/auth/reset-password`,
-          }
+            redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/auth/reset-password`,
+          },
         );
 
         if (error) {
@@ -375,9 +467,10 @@ export const settingsRouter = createTRPCRouter({
         }
 
         // Always return success for security (don't reveal if email exists)
-        return { 
-          success: true, 
-          message: "If an account with this email exists, you will receive a password reset link." 
+        return {
+          success: true,
+          message:
+            "If an account with this email exists, you will receive a password reset link.",
         };
       } catch (error) {
         console.error("[Settings requestPasswordReset Error]", error);
@@ -385,6 +478,519 @@ export const settingsRouter = createTRPCRouter({
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to send password reset email",
+        });
+      }
+    }),
+
+  /**
+   * Get All Categories
+   *
+   * Retrieves all categories for a specific user
+   *
+   * @input userId - The authenticated user's ID
+   * @returns Array of categories
+   */
+  getCategories: publicProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid("Invalid user ID"),
+      }),
+    )
+    .query(async ({ input }) => {
+      try {
+        await syncCategoriesFromProducts(input.userId);
+
+        const result = (await supabaseAdmin
+          .from("categories")
+          .select("*")
+          .eq("user_id", input.userId)
+          .order("name", { ascending: true })) as {
+          data: Array<{
+            id: string;
+            user_id: string;
+            name: string;
+            description: string | null;
+            created_at: string;
+            updated_at: string;
+          }> | null;
+          error: SupabaseError | null;
+        };
+
+        const data = result.data;
+        const error = result.error;
+
+        if (error) {
+          console.error("[Settings getCategories Error]", error);
+          // Check if table doesn't exist (common migration issue)
+          if (
+            error.code === "42P01" ||
+            error.message?.includes("does not exist")
+          ) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message:
+                "Categories table not found. Please run the database migration: 20250115000004_create_categories_table.sql",
+            });
+          }
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error.message || "Failed to fetch categories",
+          });
+        }
+
+        return data ?? [];
+      } catch (error) {
+        console.error("[Settings getCategories Error]", error);
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch categories",
+        });
+      }
+    }),
+
+  /**
+   * Create Category
+   *
+   * Creates a new category for the user
+   *
+   * @input userId - The authenticated user's ID
+   * @input name - Category name
+   * @input description - Optional category description
+   * @returns Created category
+   */
+  createCategory: publicProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid("Invalid user ID"),
+        name: z
+          .string()
+          .min(1, "Category name is required")
+          .max(100, "Category name must be less than 100 characters"),
+        description: z
+          .string()
+          .max(500, "Description must be less than 500 characters")
+          .optional()
+          .nullable(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const result = (await supabaseAdmin
+          .from("categories")
+          .insert({
+            user_id: input.userId,
+            name: input.name.trim(),
+            description: input.description?.trim() ?? null,
+            updated_at: new Date().toISOString(),
+          })
+          .select()
+          .single()) as {
+          data: {
+            id: string;
+            user_id: string;
+            name: string;
+            description: string | null;
+            created_at: string;
+            updated_at: string;
+          } | null;
+          error: SupabaseError | null;
+        };
+
+        const data = result.data;
+        const error = result.error;
+
+        if (error) {
+          console.error("[Settings createCategory Error]", error);
+          // Check if it's a unique constraint violation
+          if (error.code === "23505") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "A category with this name already exists",
+            });
+          }
+          // Check if table doesn't exist (common migration issue)
+          if (
+            error.code === "42P01" ||
+            error.message?.includes("does not exist")
+          ) {
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message:
+                "Categories table not found. Please run the database migration: 20250115000004_create_categories_table.sql",
+            });
+          }
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: error.message || "Failed to create category",
+          });
+        }
+
+        if (!data) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create category",
+          });
+        }
+
+        return data;
+      } catch (error) {
+        console.error("[Settings createCategory Error]", error);
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create category",
+        });
+      }
+    }),
+
+  /**
+   * Get Products By Category
+   *
+   * Retrieves all products that belong to a specific category
+   * Used for showing contextual info inside the category modal
+   *
+   * @input userId - The authenticated user's ID
+   * @input categoryId - The category ID to inspect
+   */
+  getCategoryProducts: publicProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid("Invalid user ID"),
+        categoryId: z.string().uuid("Invalid category ID"),
+      }),
+    )
+    .query(async ({ input }) => {
+      try {
+        // Fetch the category name to match products
+        const { data: category, error: categoryError } = await supabaseAdmin
+          .from("categories")
+          .select("name")
+          .eq("id", input.categoryId)
+          .eq("user_id", input.userId)
+          .single();
+
+        if (categoryError || !category) {
+          console.error(
+            "[Settings getCategoryProducts category Error]",
+            categoryError,
+          );
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Category not found",
+          });
+        }
+
+        const { data, error } = await supabaseAdmin
+          .from("products")
+          .select("id, name, expiry_date, quantity")
+          .eq("user_id", input.userId)
+          .eq("category", category.name)
+          .order("expiry_date", { ascending: true });
+
+        if (error) {
+          console.error("[Settings getCategoryProducts Error]", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to fetch category products",
+          });
+        }
+
+        const products =
+          (
+            data as Array<{
+              id: string;
+              name: string;
+              expiry_date: string;
+              quantity: number | null;
+            }>
+          )?.map((product) => ({
+            id: product.id,
+            name: product.name,
+            expiryDate: product.expiry_date,
+            quantity: product.quantity,
+          })) ?? [];
+
+        return {
+          categoryName: category.name,
+          products,
+        };
+      } catch (error) {
+        console.error("[Settings getCategoryProducts Error]", error);
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to fetch category products",
+        });
+      }
+    }),
+
+  /**
+   * Update Category
+   *
+   * Updates an existing category
+   *
+   * @input categoryId - The category ID
+   * @input userId - The authenticated user's ID (for security)
+   * @input name - Updated category name
+   * @input description - Updated category description
+   * @returns Updated category
+   */
+  updateCategory: publicProcedure
+    .input(
+      z.object({
+        categoryId: z.string().uuid("Invalid category ID"),
+        userId: z.string().uuid("Invalid user ID"),
+        name: z
+          .string()
+          .min(1, "Category name is required")
+          .max(100, "Category name must be less than 100 characters"),
+        description: z
+          .string()
+          .max(500, "Description must be less than 500 characters")
+          .optional()
+          .nullable(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // Step 1: Get the old category name before updating
+        const { data: oldCategory } = await supabaseAdmin
+          .from("categories")
+          .select("name")
+          .eq("id", input.categoryId)
+          .eq("user_id", input.userId)
+          .single();
+
+        if (!oldCategory) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message:
+              "Category not found or you don't have permission to update it",
+          });
+        }
+
+        const oldCategoryName = oldCategory.name;
+        const newCategoryName = input.name.trim();
+
+        // Step 2: Update the category in categories table
+        const result = (await supabaseAdmin
+          .from("categories")
+          .update({
+            name: newCategoryName,
+            description: input.description?.trim() ?? null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", input.categoryId)
+          .eq("user_id", input.userId) // Ensure user owns this category
+          .select()
+          .single()) as {
+          data: {
+            id: string;
+            user_id: string;
+            name: string;
+            description: string | null;
+            created_at: string;
+            updated_at: string;
+          } | null;
+          error: SupabaseError | null;
+        };
+
+        const data = result.data;
+        const error = result.error;
+
+        if (error) {
+          console.error("[Settings updateCategory Error]", error);
+          // Check if it's a unique constraint violation
+          if (error.code === "23505") {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "A category with this name already exists",
+            });
+          }
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to update category",
+          });
+        }
+
+        if (!data) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message:
+              "Category not found or you don't have permission to update it",
+          });
+        }
+
+        // Step 3: Update all products that use the old category name
+        // Only update if the name actually changed
+        if (oldCategoryName !== newCategoryName) {
+          const { error: productsUpdateError } = await supabaseAdmin
+            .from("products")
+            .update({ category: newCategoryName })
+            .eq("user_id", input.userId)
+            .eq("category", oldCategoryName);
+
+          if (productsUpdateError) {
+            console.error(
+              "[Settings updateCategory] Failed to sync products:",
+              productsUpdateError,
+            );
+            // Don't fail the category update, but log the error
+            // The category was updated successfully, products will sync on next product operation
+          } else {
+            console.log(
+              `[Settings updateCategory] Synced products from "${oldCategoryName}" to "${newCategoryName}"`,
+            );
+          }
+        }
+
+        // Step 4: Fetch all products in this category to return to the client
+        const { data: categoryProductsData, error: categoryProductsError } =
+          await supabaseAdmin
+            .from("products")
+            .select("id, name, expiry_date, quantity")
+            .eq("user_id", input.userId)
+            .eq("category", newCategoryName)
+            .order("expiry_date", { ascending: true });
+
+        if (categoryProductsError) {
+          console.error(
+            "[Settings updateCategory] Failed to fetch category products:",
+            categoryProductsError,
+          );
+        }
+
+        const products: CategoryProductSummary[] =
+          (
+            categoryProductsData as Array<{
+              id: string;
+              name: string;
+              expiry_date: string;
+              quantity: number | null;
+            }>
+          )?.map((product) => ({
+            id: product.id,
+            name: product.name,
+            expiryDate: product.expiry_date,
+            quantity: product.quantity,
+          })) ?? [];
+
+        return {
+          category: data,
+          products,
+        };
+      } catch (error) {
+        console.error("[Settings updateCategory Error]", error);
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update category",
+        });
+      }
+    }),
+
+  /**
+   * Delete Category
+   *
+   * Deletes a category
+   *
+   * @input categoryId - The category ID
+   * @input userId - The authenticated user's ID (for security)
+   * @returns Success status
+   */
+  deleteCategory: publicProcedure
+    .input(
+      z.object({
+        categoryId: z.string().uuid("Invalid category ID"),
+        userId: z.string().uuid("Invalid user ID"),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // Step 1: Get the category name before deleting
+        const { data: category } = await supabaseAdmin
+          .from("categories")
+          .select("name")
+          .eq("id", input.categoryId)
+          .eq("user_id", input.userId)
+          .single();
+
+        if (!category) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message:
+              "Category not found or you don't have permission to delete it",
+          });
+        }
+
+        const categoryName = category.name;
+
+        // Step 2: Check if any products are using this category
+        const { data: productsUsingCategory, error: productsCheckError } =
+          await supabaseAdmin
+            .from("products")
+            .select("id")
+            .eq("user_id", input.userId)
+            .eq("category", categoryName)
+            .limit(1); // We only need to know if any exist
+
+        if (productsCheckError) {
+          console.error(
+            "[Settings deleteCategory] Error checking products:",
+            productsCheckError,
+          );
+          // Continue with deletion attempt even if check fails
+        }
+
+        // Step 3: Prevent deletion if products are using this category
+        if (productsUsingCategory && productsUsingCategory.length > 0) {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `Cannot delete category "${categoryName}" because it is being used by one or more products. Please reassign or delete those products first.`,
+          });
+        }
+
+        // Step 4: Delete the category (no products are using it)
+        const result = (await supabaseAdmin
+          .from("categories")
+          .delete()
+          .eq("id", input.categoryId)
+          .eq("user_id", input.userId) // Ensure user owns this category
+          .select()
+          .single()) as {
+          data: {
+            id: string;
+          } | null;
+          error: SupabaseError | null;
+        };
+
+        const data = result.data;
+        const error = result.error;
+
+        if (error) {
+          console.error("[Settings deleteCategory Error]", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to delete category",
+          });
+        }
+
+        if (!data) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message:
+              "Category not found or you don't have permission to delete it",
+          });
+        }
+
+        return { success: true };
+      } catch (error) {
+        console.error("[Settings deleteCategory Error]", error);
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to delete category",
         });
       }
     }),

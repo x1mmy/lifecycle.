@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Plus,
   Search,
@@ -70,9 +70,10 @@ type FilterType = "all" | "expired" | "expiring-soon" | "good";
 type SortField = "name" | "category" | "expiryDate" | "status" | "quantity";
 type SortDirection = "asc" | "desc";
 
-export default function ProductsPage() {
+function ProductsPageContent() {
   const { user, loading, isAuthenticated } = useSupabaseAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { toast } = useToast();
 
   // Core product data and UI state
@@ -82,6 +83,9 @@ export default function ProductsPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(
     undefined,
+  );
+  const [prefillProductId, setPrefillProductId] = useState<string | null>(
+    searchParams?.get("productId") ?? null,
   );
 
   /**
@@ -265,6 +269,29 @@ export default function ProductsPage() {
       setProductsLoading(false);
     }
   }, [user, toast]);
+
+  // Capture productId from query string whenever it changes
+  useEffect(() => {
+    const productIdFromQuery = searchParams?.get("productId");
+    if (productIdFromQuery) {
+      setPrefillProductId(productIdFromQuery);
+    }
+  }, [searchParams]);
+
+  // Once products are loaded, open the edit modal if a prefill product exists
+  useEffect(() => {
+    if (!prefillProductId || products.length === 0) return;
+    const productToPrefill = products.find(
+      (product) => product.id === prefillProductId,
+    );
+
+    if (productToPrefill) {
+      setSelectedProduct(productToPrefill);
+      setIsFormOpen(true);
+      setPrefillProductId(null);
+      router.replace("/products", { scroll: false });
+    }
+  }, [prefillProductId, products, router]);
 
   // Authentication check - redirect to login if not authenticated
   useEffect(() => {
@@ -574,6 +601,8 @@ export default function ProductsPage() {
 
       // Invalidate categories cache to refresh dropdown with any new categories
       await utils.products.getCategories.invalidate({ userId: user.id });
+      // Also invalidate settings categories so the settings page updates instantly
+      await utils.settings.getCategories.invalidate({ userId: user.id });
 
       // Reload products from client-side and close form
       await loadUserProducts();
@@ -1523,5 +1552,13 @@ export default function ProductsPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading products...</div>}>
+      <ProductsPageContent />
+    </Suspense>
   );
 }
