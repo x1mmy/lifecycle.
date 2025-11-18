@@ -64,6 +64,75 @@ interface SupabaseError {
 }
 
 /**
+ * Helper to synchronize categories table with unique product categories
+ */
+async function syncCategoriesFromProducts(userId: string): Promise<void> {
+  try {
+    const [
+      { data: existingCategories },
+      { data: productCategories, error: productsError },
+    ] = await Promise.all([
+      supabaseAdmin.from("categories").select("name").eq("user_id", userId),
+      supabaseAdmin.from("products").select("category").eq("user_id", userId),
+    ]);
+
+    if (productsError || !productCategories) {
+      if (productsError) {
+        console.error(
+          "[Settings syncCategoriesFromProducts Error]",
+          productsError,
+        );
+      }
+      return;
+    }
+
+    const existingSet = new Set(
+      (existingCategories ?? [])
+        .map((cat) => cat.name?.trim().toLowerCase())
+        .filter((name): name is string => !!name),
+    );
+
+    const categoriesToInsert = Array.from(
+      new Set(
+        productCategories
+          .map((product) => product.category?.trim())
+          .filter(
+            (name): name is string =>
+              !!name && name !== "-" && !existingSet.has(name.toLowerCase()),
+          ),
+      ),
+    );
+
+    if (categoriesToInsert.length === 0) {
+      return;
+    }
+
+    const records = categoriesToInsert.map((name) => ({
+      user_id: userId,
+      name,
+      description: null,
+      updated_at: new Date().toISOString(),
+    }));
+
+    const { error: insertError } = await supabaseAdmin
+      .from("categories")
+      .insert(records);
+
+    if (insertError) {
+      console.error(
+        "[Settings syncCategoriesFromProducts Insert Error]",
+        insertError,
+      );
+    }
+  } catch (error) {
+    console.error(
+      "[Settings syncCategoriesFromProducts Unexpected Error]",
+      error,
+    );
+  }
+}
+
+/**
  * Profile Update Input Validation Schema
  * Validates profile fields before database updates
  */
@@ -429,6 +498,8 @@ export const settingsRouter = createTRPCRouter({
     )
     .query(async ({ input }) => {
       try {
+        await syncCategoriesFromProducts(input.userId);
+
         const result = (await supabaseAdmin
           .from("categories")
           .select("*")
