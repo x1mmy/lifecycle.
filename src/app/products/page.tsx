@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo } from "react";
+import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Plus,
@@ -70,7 +70,7 @@ type FilterType = "all" | "expired" | "expiring-soon" | "good";
 type SortField = "name" | "category" | "expiryDate" | "status" | "quantity";
 type SortDirection = "asc" | "desc";
 
-export default function ProductsPage() {
+function ProductsPageContent() {
   const { user, loading, isAuthenticated } = useSupabaseAuth();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -1552,5 +1552,13 @@ export default function ProductsPage() {
         )}
       </main>
     </div>
+  );
+}
+
+export default function ProductsPage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading products...</div>}>
+      <ProductsPageContent />
+    </Suspense>
   );
 }

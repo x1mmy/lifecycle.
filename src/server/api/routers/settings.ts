@@ -510,7 +510,7 @@ export const settingsRouter = createTRPCRouter({
           .insert({
             user_id: input.userId,
             name: input.name.trim(),
-            description: input.description?.trim() || null,
+            description: input.description?.trim() ?? null,
             updated_at: new Date().toISOString(),
           })
           .select()
@@ -707,7 +707,7 @@ export const settingsRouter = createTRPCRouter({
           .from("categories")
           .update({
             name: newCategoryName,
-            description: input.description?.trim() || null,
+            description: input.description?.trim() ?? null,
             updated_at: new Date().toISOString(),
           })
           .eq("id", input.categoryId)

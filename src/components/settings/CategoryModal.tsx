@@ -71,7 +71,7 @@ export function CategoryModal({
     if (isOpen) {
       if (category) {
         setName(category.name);
-        setDescription(category.description || "");
+        setDescription(category.description ?? "");
       } else {
         setName("");
         setDescription("");

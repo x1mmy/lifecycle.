@@ -171,7 +171,9 @@ export default function SettingsPage() {
         variant: "destructive",
         action: <XCircle className="h-5 w-5 text-red-600" />,
       });
-      throw error;
+      throw error instanceof Error
+        ? error
+        : new Error("Failed to create category");
     },
   }) ?? { mutateAsync: async () => Promise.resolve(), isPending: false };
 
@@ -246,7 +248,9 @@ export default function SettingsPage() {
         variant: "destructive",
         action: <XCircle className="h-5 w-5 text-red-600" />,
       });
-      throw error;
+      throw error instanceof Error
+        ? error
+        : new Error("Failed to update category");
     },
   }) ?? { mutateAsync: async () => Promise.resolve(), isPending: false };
 

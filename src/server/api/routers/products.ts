@@ -101,7 +101,7 @@ async function ensureCategoryExists(
   userId: string,
   categoryName: string,
 ): Promise<void> {
-  if (!categoryName || !categoryName.trim()) {
+  if (!categoryName?.trim()) {
     return; // Skip empty categories
   }
 
