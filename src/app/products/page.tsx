@@ -1,6 +1,13 @@
 "use client";
 
-import { Suspense, useEffect, useState, useCallback, useMemo } from "react";
+import {
+  Suspense,
+  useEffect,
+  useState,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   Plus,
@@ -18,6 +25,7 @@ import {
   Calendar,
   X,
 } from "lucide-react";
+import { Checkbox } from "~/components/ui/checkbox";
 import { useSupabaseAuth } from "~/hooks/useSupabaseAuth";
 import { supabase } from "~/lib/supabase";
 import type { Product } from "~/types";
@@ -136,6 +144,19 @@ function ProductsPageContent() {
 
   // Date Filter Dropdown State
   const [dateFilterOpen, setDateFilterOpen] = useState(false);
+
+  /**
+   * Multi-Select State
+   * Manages selection of multiple products for bulk operations
+   */
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(
+    null,
+  );
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStartIndex, setDragStartIndex] = useState<number | null>(null);
+  const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   /**
    * Parse date string from search term
@@ -338,7 +359,9 @@ function ProductsPageContent() {
           (product) =>
             product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            product.batchNumber?.toLowerCase().includes(searchTerm.toLowerCase()),
+            product.batchNumber
+              ?.toLowerCase()
+              .includes(searchTerm.toLowerCase()),
         );
       }
     }
@@ -426,7 +449,15 @@ function ProductsPageContent() {
     });
 
     return result;
-  }, [products, searchTerm, activeFilter, startDate, endDate, sortField, sortDirection]);
+  }, [
+    products,
+    searchTerm,
+    activeFilter,
+    startDate,
+    endDate,
+    sortField,
+    sortDirection,
+  ]);
 
   /**
    * Pagination Calculations
@@ -442,7 +473,15 @@ function ProductsPageContent() {
   // Reset to page 1 when filters/sort/pageSize change (prevents empty page scenarios)
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, activeFilter, startDate, endDate, sortField, sortDirection, pageSize]);
+  }, [
+    searchTerm,
+    activeFilter,
+    startDate,
+    endDate,
+    sortField,
+    sortDirection,
+    pageSize,
+  ]);
 
   /**
    * Filter Counts
@@ -484,13 +523,16 @@ function ProductsPageContent() {
     // Then calculate counts from date-filtered products
     return {
       all: dateFilteredProducts.length,
-      expired: dateFilteredProducts.filter((p) => getDaysUntilExpiry(p.expiryDate) < 0)
-        .length,
+      expired: dateFilteredProducts.filter(
+        (p) => getDaysUntilExpiry(p.expiryDate) < 0,
+      ).length,
       "expiring-soon": dateFilteredProducts.filter((p) => {
         const days = getDaysUntilExpiry(p.expiryDate);
         return days >= 0 && days <= 7;
       }).length,
-      good: dateFilteredProducts.filter((p) => getDaysUntilExpiry(p.expiryDate) > 7).length,
+      good: dateFilteredProducts.filter(
+        (p) => getDaysUntilExpiry(p.expiryDate) > 7,
+      ).length,
     };
   }, [products, startDate, endDate]);
 
@@ -690,6 +732,267 @@ function ProductsPageContent() {
     }
   };
 
+  /**
+   * Multi-Select Handlers
+   * Manage selection state for bulk operations
+   */
+
+  // Toggle individual product selection
+  const handleToggleSelection = (
+    productId: string,
+    index: number,
+    event?: React.MouseEvent,
+  ) => {
+    // Handle shift-click for range selection
+    if (event?.shiftKey && lastSelectedIndex !== null) {
+      const start = Math.min(lastSelectedIndex, index);
+      const end = Math.max(lastSelectedIndex, index);
+      const newSelectedIds = new Set(selectedIds);
+
+      for (let i = start; i <= end; i++) {
+        if (i < paginatedProducts.length) {
+          newSelectedIds.add(paginatedProducts[i]!.id);
+        }
+      }
+
+      setSelectedIds(newSelectedIds);
+      setLastSelectedIndex(index);
+      return;
+    }
+
+    // Regular toggle
+    const newSelectedIds = new Set(selectedIds);
+    if (newSelectedIds.has(productId)) {
+      newSelectedIds.delete(productId);
+    } else {
+      newSelectedIds.add(productId);
+    }
+    setSelectedIds(newSelectedIds);
+    setLastSelectedIndex(index);
+  };
+
+  // Select all visible products
+  const handleSelectAll = useCallback(
+    (checked: boolean) => {
+      setSelectedIds((prevSelectedIds) => {
+        const newSelectedIds = new Set(prevSelectedIds);
+        if (checked) {
+          paginatedProducts.forEach((product) => {
+            newSelectedIds.add(product.id);
+          });
+        } else {
+          paginatedProducts.forEach((product) => {
+            newSelectedIds.delete(product.id);
+          });
+        }
+        return newSelectedIds;
+      });
+    },
+    [paginatedProducts],
+  );
+
+  // Check if all visible products are selected
+  const allVisibleSelected = useMemo(() => {
+    if (paginatedProducts.length === 0) return false;
+    return paginatedProducts.every((product) => selectedIds.has(product.id));
+  }, [paginatedProducts, selectedIds]);
+
+  // Check if some visible products are selected (for indeterminate state)
+  const someVisibleSelected = useMemo(() => {
+    return paginatedProducts.some((product) => selectedIds.has(product.id));
+  }, [paginatedProducts, selectedIds]);
+
+  // Clear all selections
+  const handleClearSelection = useCallback(() => {
+    setSelectedIds(new Set());
+    setLastSelectedIndex(null);
+  }, []);
+
+  // Track the initial selection state when drag starts
+  const dragStartSelectedState = useRef<boolean>(false);
+  const initialSelectionState = useRef<Set<string>>(new Set());
+
+  // Drag selection handlers
+  const handleMouseDown = (index: number, event?: React.MouseEvent) => {
+    // Don't start drag if clicking directly on checkbox or its children
+    if (event?.target instanceof HTMLElement) {
+      // Check if clicking on checkbox button or its children (SVG check icon)
+      const isCheckboxClick =
+        event.target.closest('button[type="button"]')?.querySelector("svg") ||
+        event.target.tagName === "svg" ||
+        event.target.closest("[data-state]");
+
+      if (isCheckboxClick) {
+        return;
+      }
+    }
+
+    setIsDragging(true);
+    setDragStartIndex(index);
+    // Remember the initial state of the starting item and all selections
+    const productId = paginatedProducts[index]!.id;
+    dragStartSelectedState.current = selectedIds.has(productId);
+    initialSelectionState.current = new Set(selectedIds);
+
+    // Toggle the starting item to the opposite state
+    const newSelectedIds = new Set(selectedIds);
+    if (dragStartSelectedState.current) {
+      newSelectedIds.delete(productId);
+    } else {
+      newSelectedIds.add(productId);
+    }
+    setSelectedIds(newSelectedIds);
+  };
+
+  const handleMouseEnter = (index: number) => {
+    if (isDragging && dragStartIndex !== null) {
+      const start = Math.min(dragStartIndex, index);
+      const end = Math.max(dragStartIndex, index);
+
+      // Start with the initial selection state (before drag started)
+      const newSelectedIds = new Set(initialSelectionState.current);
+
+      // Set all items in range to the NEW state (opposite of initial state)
+      // If starting item was initially selected, deselect all in range
+      // If starting item was initially unselected, select all in range
+      const targetState = !dragStartSelectedState.current;
+      for (let i = start; i <= end; i++) {
+        if (i < paginatedProducts.length) {
+          if (targetState) {
+            newSelectedIds.add(paginatedProducts[i]!.id);
+          } else {
+            newSelectedIds.delete(paginatedProducts[i]!.id);
+          }
+        }
+      }
+
+      setSelectedIds(newSelectedIds);
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+    setDragStartIndex(null);
+    dragStartSelectedState.current = false;
+    initialSelectionState.current = new Set();
+  };
+
+  // Add global mouse up listener to properly end drag selection
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isDragging) {
+        handleMouseUp();
+      }
+    };
+
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+    return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
+  }, [isDragging]);
+
+  // Bulk delete handler
+  const handleBulkDelete = async () => {
+    if (!user || selectedIds.size === 0) return;
+
+    setIsBulkDeleting(true);
+    const selectedArray = Array.from(selectedIds);
+    let successCount = 0;
+    let failCount = 0;
+    const failedProducts: string[] = [];
+
+    try {
+      for (const productId of selectedArray) {
+        try {
+          await deleteProductMutation.mutateAsync({
+            productId,
+            userId: user.id,
+          });
+          successCount++;
+        } catch (error) {
+          failCount++;
+          const product = products.find((p) => p.id === productId);
+          if (product) {
+            failedProducts.push(product.name);
+          }
+        }
+      }
+
+      if (successCount > 0) {
+        toast({
+          title: "Products deleted",
+          description: `Successfully deleted ${successCount} product${successCount !== 1 ? "s" : ""}.${failCount > 0 ? ` ${failCount} failed.` : ""}`,
+        });
+        await loadUserProducts();
+        handleClearSelection();
+      }
+
+      if (failCount > 0 && failedProducts.length > 0) {
+        toast({
+          title: "Some deletions failed",
+          description: `Failed to delete: ${failedProducts.slice(0, 3).join(", ")}${failedProducts.length > 3 ? ` and ${failedProducts.length - 3} more` : ""}`,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error during bulk delete:", error);
+      toast({
+        title: "Error",
+        description: "An error occurred during bulk deletion",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBulkDeleting(false);
+      setBulkDeleteModalOpen(false);
+    }
+  };
+
+  // Keyboard shortcuts - use refs to avoid dependency issues
+  const selectAllRef = useRef(handleSelectAll);
+  const clearSelectionRef = useRef(handleClearSelection);
+  const selectedIdsRef = useRef(selectedIds);
+  const paginatedProductsRef = useRef(paginatedProducts);
+
+  useEffect(() => {
+    selectAllRef.current = handleSelectAll;
+    clearSelectionRef.current = handleClearSelection;
+    selectedIdsRef.current = selectedIds;
+    paginatedProductsRef.current = paginatedProducts;
+  }, [handleSelectAll, handleClearSelection, selectedIds, paginatedProducts]);
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      // Only handle if not typing in an input
+      if (
+        event.target instanceof HTMLInputElement ||
+        event.target instanceof HTMLTextAreaElement
+      ) {
+        return;
+      }
+
+      // Ctrl/Cmd + A: Select all visible
+      if ((event.ctrlKey || event.metaKey) && event.key === "a") {
+        event.preventDefault();
+        if (paginatedProductsRef.current.length > 0) {
+          selectAllRef.current(true);
+        }
+      }
+      // Escape: Clear selection
+      else if (event.key === "Escape") {
+        clearSelectionRef.current();
+      }
+      // Delete/Backspace: Open delete confirmation
+      else if (
+        (event.key === "Delete" || event.key === "Backspace") &&
+        selectedIdsRef.current.size > 0
+      ) {
+        event.preventDefault();
+        setBulkDeleteModalOpen(true);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Show loading spinner while checking authentication
   if (loading || productsLoading) {
     return (
@@ -822,7 +1125,7 @@ function ProductsPageContent() {
           {/* Date Filter Button */}
           <button
             onClick={() => setDateFilterOpen(true)}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition-all flex items-center gap-2 ${
+            className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all ${
               startDate || endDate
                 ? "bg-purple-600 text-white shadow-md"
                 : "border border-gray-200 bg-white text-gray-700 hover:border-purple-300 hover:bg-purple-50"
@@ -831,7 +1134,9 @@ function ProductsPageContent() {
             <Calendar className="h-4 w-4" />
             Filter by Date
             {(startDate || endDate) && (
-              <span className={`ml-1 rounded-full px-2 py-0.5 text-xs bg-purple-500`}>
+              <span
+                className={`ml-1 rounded-full bg-purple-500 px-2 py-0.5 text-xs`}
+              >
                 Active
               </span>
             )}
@@ -871,7 +1176,7 @@ function ProductsPageContent() {
                         setStartDate("");
                         setEndDate("");
                       }}
-                      className="text-sm text-purple-600 hover:text-purple-700 font-medium"
+                      className="text-sm font-medium text-purple-600 hover:text-purple-700"
                     >
                       Clear All
                     </button>
@@ -880,9 +1185,12 @@ function ProductsPageContent() {
               </div>
 
               {/* Content */}
-              <div className="px-6 py-4 space-y-4">
+              <div className="space-y-4 px-6 py-4">
                 <div>
-                  <label htmlFor="startDate-mobile" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="startDate-mobile"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
                     From Date
                   </label>
                   <div className="flex items-center gap-2">
@@ -896,7 +1204,7 @@ function ProductsPageContent() {
                     {startDate && (
                       <button
                         onClick={() => setStartDate("")}
-                        className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                        className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
                         title="Clear start date"
                       >
                         <X className="h-5 w-5" />
@@ -906,7 +1214,10 @@ function ProductsPageContent() {
                 </div>
 
                 <div>
-                  <label htmlFor="endDate-mobile" className="block text-sm font-medium text-gray-700 mb-2">
+                  <label
+                    htmlFor="endDate-mobile"
+                    className="mb-2 block text-sm font-medium text-gray-700"
+                  >
                     To Date
                   </label>
                   <div className="flex items-center gap-2">
@@ -920,7 +1231,7 @@ function ProductsPageContent() {
                     {endDate && (
                       <button
                         onClick={() => setEndDate("")}
-                        className="rounded-full p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                        className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
                         title="Clear end date"
                       >
                         <X className="h-5 w-5" />
@@ -934,7 +1245,7 @@ function ProductsPageContent() {
               <div className="border-t border-gray-100 px-6 py-4">
                 <button
                   onClick={() => setDateFilterOpen(false)}
-                  className="w-full rounded-lg bg-purple-600 px-4 py-3 font-medium text-white hover:bg-purple-700 transition-colors"
+                  className="w-full rounded-lg bg-purple-600 px-4 py-3 font-medium text-white transition-colors hover:bg-purple-700"
                 >
                   Done
                 </button>
@@ -942,8 +1253,8 @@ function ProductsPageContent() {
             </div>
 
             {/* Desktop: Centered Modal */}
-            <div className="hidden md:flex absolute inset-0 items-center justify-center p-4">
-              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md">
+            <div className="absolute inset-0 hidden items-center justify-center p-4 md:flex">
+              <div className="w-full max-w-md rounded-xl bg-white shadow-2xl">
                 {/* Header */}
                 <div className="border-b border-gray-100 px-6 py-4">
                   <div className="flex items-center justify-between">
@@ -952,20 +1263,23 @@ function ProductsPageContent() {
                     </h3>
                     <button
                       onClick={() => setDateFilterOpen(false)}
-                      className="rounded-lg p-2 hover:bg-gray-100 transition-colors"
+                      className="rounded-lg p-2 transition-colors hover:bg-gray-100"
                     >
                       <X className="h-5 w-5" />
                     </button>
                   </div>
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="mt-1 text-sm text-gray-500">
                     Select date range for products
                   </p>
                 </div>
 
                 {/* Content */}
-                <div className="px-6 py-4 space-y-4">
+                <div className="space-y-4 px-6 py-4">
                   <div>
-                    <label htmlFor="startDate-desktop" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      htmlFor="startDate-desktop"
+                      className="mb-2 block text-sm font-medium text-gray-700"
+                    >
                       From Date
                     </label>
                     <div className="flex items-center gap-2">
@@ -979,7 +1293,7 @@ function ProductsPageContent() {
                       {startDate && (
                         <button
                           onClick={() => setStartDate("")}
-                          className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                          className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
                           title="Clear start date"
                         >
                           <X className="h-4 w-4" />
@@ -989,7 +1303,10 @@ function ProductsPageContent() {
                   </div>
 
                   <div>
-                    <label htmlFor="endDate-desktop" className="block text-sm font-medium text-gray-700 mb-2">
+                    <label
+                      htmlFor="endDate-desktop"
+                      className="mb-2 block text-sm font-medium text-gray-700"
+                    >
                       To Date
                     </label>
                     <div className="flex items-center gap-2">
@@ -1003,7 +1320,7 @@ function ProductsPageContent() {
                       {endDate && (
                         <button
                           onClick={() => setEndDate("")}
-                          className="rounded-full p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors"
+                          className="rounded-full p-1.5 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
                           title="Clear end date"
                         >
                           <X className="h-4 w-4" />
@@ -1018,7 +1335,7 @@ function ProductsPageContent() {
                         setStartDate("");
                         setEndDate("");
                       }}
-                      className="w-full text-sm text-purple-600 hover:text-purple-700 font-medium py-2"
+                      className="w-full py-2 text-sm font-medium text-purple-600 hover:text-purple-700"
                     >
                       Clear All Dates
                     </button>
@@ -1029,7 +1346,7 @@ function ProductsPageContent() {
                 <div className="border-t border-gray-100 px-6 py-4">
                   <button
                     onClick={() => setDateFilterOpen(false)}
-                    className="w-full rounded-lg bg-purple-600 px-4 py-2 font-medium text-white hover:bg-purple-700 transition-colors"
+                    className="w-full rounded-lg bg-purple-600 px-4 py-2 font-medium text-white transition-colors hover:bg-purple-700"
                   >
                     Apply Filter
                   </button>
@@ -1047,9 +1364,17 @@ function ProductsPageContent() {
               <div className="block md:hidden">
                 <div className="p-4">
                   <div className="mb-4 flex items-center justify-between">
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      Products ({filteredAndSortedProducts.length})
-                    </h3>
+                    <div className="flex items-center gap-3">
+                      <Checkbox
+                        checked={allVisibleSelected}
+                        onCheckedChange={handleSelectAll}
+                        className="shrink-0"
+                        aria-label="Select all products"
+                      />
+                      <h3 className="text-lg font-semibold text-gray-900">
+                        Products ({filteredAndSortedProducts.length})
+                      </h3>
+                    </div>
                     <button
                       onClick={() => setSortPickerOpen(true)}
                       className="flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 active:bg-gray-100"
@@ -1059,72 +1384,94 @@ function ProductsPageContent() {
                     </button>
                   </div>
 
-                  <div className="space-y-3">
-                    {paginatedProducts.map((product) => (
+                  <div className="space-y-2">
+                    {paginatedProducts.map((product, index) => (
                       <div
                         key={product.id}
-                        className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+                        className={`rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md ${
+                          selectedIds.has(product.id)
+                            ? "ring-2 ring-indigo-500"
+                            : ""
+                        } ${isDragging ? "cursor-grabbing" : ""}${isDragging ? "select-none" : ""}`}
+                        onMouseDown={(e) => handleMouseDown(index, e)}
+                        onMouseEnter={() => handleMouseEnter(index)}
                       >
-                        <div className="flex items-start justify-between">
+                        <div className="flex items-start gap-3">
+                          <div className="flex shrink-0 items-center pt-0.5">
+                            <Checkbox
+                              checked={selectedIds.has(product.id)}
+                              onCheckedChange={(checked) => {
+                                const newSelectedIds = new Set(selectedIds);
+                                if (checked) {
+                                  newSelectedIds.add(product.id);
+                                } else {
+                                  newSelectedIds.delete(product.id);
+                                }
+                                setSelectedIds(newSelectedIds);
+                                setLastSelectedIndex(index);
+                              }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                              }}
+                              onMouseDown={(e) => {
+                                e.stopPropagation();
+                              }}
+                              aria-label={`Select ${product.name}`}
+                            />
+                          </div>
                           <div className="min-w-0 flex-1">
-                            <h4 className="truncate text-base font-semibold text-gray-900">
-                              {product.name}
-                            </h4>
-                            <div className="mt-2 space-y-1">
+                            <div className="flex items-start justify-between gap-2">
+                              <h4 className="truncate text-sm font-semibold text-gray-900">
+                                {product.name}
+                              </h4>
+                              <div className="flex shrink-0 gap-1">
+                                <button
+                                  onClick={() => handleEditProduct(product)}
+                                  className="rounded p-1.5 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
+                                  title="Edit product"
+                                >
+                                  <Edit2 className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteClick(product)}
+                                  className="rounded p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
+                                  title="Delete product"
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                            <div className="mt-1.5 space-y-0.5 text-xs">
                               <div className="flex items-center justify-between">
-                                <span className="text-sm text-gray-500">
-                                  Category:
-                                </span>
-                                <span className="text-sm font-medium text-gray-900">
+                                <span className="text-gray-500">Category:</span>
+                                <span className="font-medium text-gray-900">
                                   {product.category}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
-                                <span className="text-sm text-gray-500">
-                                  Expires:
-                                </span>
-                                <span className="text-sm font-medium text-gray-900">
+                                <span className="text-gray-500">Expires:</span>
+                                <span className="font-medium text-gray-900">
                                   {formatDate(product.expiryDate)}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
-                                <span className="text-sm text-gray-500">
-                                  Quantity:
-                                </span>
-                                <span className="text-sm font-medium text-gray-900">
+                                <span className="text-gray-500">Quantity:</span>
+                                <span className="font-medium text-gray-900">
                                   {product.quantity}
                                 </span>
                               </div>
                               {product.batchNumber && (
                                 <div className="flex items-center justify-between">
-                                  <span className="text-sm text-gray-500">
-                                    Batch:
-                                  </span>
-                                  <span className="text-sm font-medium text-gray-900">
+                                  <span className="text-gray-500">Batch:</span>
+                                  <span className="font-medium text-gray-900">
                                     {product.batchNumber}
                                   </span>
                                 </div>
                               )}
                             </div>
-                            <div className="mt-3">
+                            <div className="mt-2">
                               {getStatusBadge(product.expiryDate)}
                             </div>
-                          </div>
-                          <div className="ml-4 flex flex-col gap-2">
-                            <button
-                              onClick={() => handleEditProduct(product)}
-                              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
-                              title="Edit product"
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </button>
-                            <button
-                              onClick={() => handleDeleteClick(product)}
-                              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                              title="Delete product"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
                           </div>
                         </div>
                       </div>
@@ -1138,6 +1485,13 @@ function ProductsPageContent() {
                 <table className="w-full">
                   <thead className="border-b border-gray-100 bg-gray-50">
                     <tr>
+                      <th className="w-12 px-4 py-3 text-left">
+                        <Checkbox
+                          checked={allVisibleSelected}
+                          onCheckedChange={handleSelectAll}
+                          aria-label="Select all products"
+                        />
+                      </th>
                       <th className="px-6 py-3 text-left text-xs font-medium tracking-wider text-gray-500 uppercase">
                         <button
                           onClick={() => handleSort("name")}
@@ -1232,11 +1586,37 @@ function ProductsPageContent() {
                     </tr>
                   </thead>
                   <tbody className="bg-white">
-                    {paginatedProducts.map((product) => (
+                    {paginatedProducts.map((product, index) => (
                       <tr
                         key={product.id}
-                        className="border-b border-gray-50 transition-colors hover:bg-gray-50"
+                        className={`border-b border-gray-50 transition-colors hover:bg-gray-50 ${
+                          selectedIds.has(product.id) ? "bg-indigo-50" : ""
+                        } ${isDragging ? "cursor-grabbing" : ""}${isDragging ? "select-none" : ""}`}
+                        onMouseDown={(e) => handleMouseDown(index, e)}
+                        onMouseEnter={() => handleMouseEnter(index)}
                       >
+                        <td className="w-12 px-4 py-4">
+                          <Checkbox
+                            checked={selectedIds.has(product.id)}
+                            onCheckedChange={(checked) => {
+                              const newSelectedIds = new Set(selectedIds);
+                              if (checked) {
+                                newSelectedIds.add(product.id);
+                              } else {
+                                newSelectedIds.delete(product.id);
+                              }
+                              setSelectedIds(newSelectedIds);
+                              setLastSelectedIndex(index);
+                            }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                            }}
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                            }}
+                            aria-label={`Select ${product.name}`}
+                          />
+                        </td>
                         <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
                           {product.name}
                         </td>
@@ -1550,6 +1930,91 @@ function ProductsPageContent() {
             </div>
           </div>
         )}
+
+        {/* Floating Action Button for Bulk Delete - Desktop/Tablet */}
+        {selectedIds.size > 0 && (
+          <>
+            <div className="fixed right-6 bottom-6 z-40 hidden transition-all duration-300 md:block">
+              <button
+                onClick={() => setBulkDeleteModalOpen(true)}
+                className="flex items-center gap-3 rounded-full bg-red-600 px-6 py-4 font-medium text-white shadow-lg transition-all hover:bg-red-700 hover:shadow-xl active:scale-95"
+                aria-label={`Delete ${selectedIds.size} selected product${selectedIds.size !== 1 ? "s" : ""}`}
+              >
+                <Trash2 className="h-5 w-5" />
+                <span>
+                  Delete {selectedIds.size}{" "}
+                  {selectedIds.size === 1 ? "product" : "products"}
+                </span>
+              </button>
+            </div>
+
+            {/* Mobile FAB - Full width on small screens */}
+            <div className="fixed right-0 bottom-0 left-0 z-40 block transition-all duration-300 md:hidden">
+              <div className="border-t border-gray-200 bg-white p-4 shadow-lg">
+                <button
+                  onClick={() => setBulkDeleteModalOpen(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-6 py-3 font-medium text-white transition-colors hover:bg-red-700"
+                >
+                  <Trash2 className="h-5 w-5" />
+                  <span>
+                    Delete {selectedIds.size}{" "}
+                    {selectedIds.size === 1 ? "product" : "products"}
+                  </span>
+                </button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Bulk Delete Confirmation Modal */}
+        {bulkDeleteModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+            <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+              <div className="mb-4 flex items-start gap-4">
+                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
+                  <AlertCircle className="h-6 w-6 text-red-600" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="mb-1 text-lg font-semibold text-gray-900">
+                    Delete Selected Products
+                  </h3>
+                  <p className="text-sm text-gray-500">
+                    Are you sure you want to delete{" "}
+                    <span className="font-medium text-gray-900">
+                      {selectedIds.size} selected product
+                      {selectedIds.size !== 1 ? "s" : ""}
+                    </span>
+                    ? This action cannot be undone.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setBulkDeleteModalOpen(false)}
+                  disabled={isBulkDeleting}
+                  className="flex-1 rounded-lg border border-gray-200 px-4 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={isBulkDeleting}
+                  className="flex-1 rounded-lg bg-red-600 px-4 py-2 font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {isBulkDeleting ? (
+                    <>
+                      <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+                      Deleting...
+                    </>
+                  ) : (
+                    "Delete"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
@@ -1557,7 +2022,11 @@ function ProductsPageContent() {
 
 export default function ProductsPage() {
   return (
-    <Suspense fallback={<div className="p-8 text-center text-gray-500">Loading products...</div>}>
+    <Suspense
+      fallback={
+        <div className="p-8 text-center text-gray-500">Loading products...</div>
+      }
+    >
       <ProductsPageContent />
     </Suspense>
   );
