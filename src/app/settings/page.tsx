@@ -563,10 +563,11 @@ export default function SettingsPage() {
     // Don't start drag if clicking directly on checkbox or its children
     if (event?.target instanceof HTMLElement) {
       // Check if clicking on checkbox button or its children (SVG check icon)
-      const isCheckboxClick =
-        event.target.closest('button[type="button"]')?.querySelector("svg") ||
-        event.target.tagName === "svg" ||
-        event.target.closest("[data-state]");
+      const isCheckboxClick = Boolean(
+        (event.target.closest('button[type="button"]')?.querySelector("svg") ??
+          event.target.tagName === "svg") ||
+          event.target.closest("[data-state]"),
+      );
 
       if (isCheckboxClick) {
         return;
@@ -577,7 +578,8 @@ export default function SettingsPage() {
     setDragStartCategoryIndex(index);
     // Remember the initial state of the starting item and all selections
     const categoryId = filteredCategories[index]!.id;
-    dragStartCategorySelectedState.current = selectedCategoryIds.has(categoryId);
+    dragStartCategorySelectedState.current =
+      selectedCategoryIds.has(categoryId);
     initialCategorySelectionState.current = new Set(selectedCategoryIds);
 
     // Toggle the starting item to the opposite state
@@ -631,8 +633,8 @@ export default function SettingsPage() {
       }
     };
 
-    window.addEventListener('mouseup', handleGlobalMouseUp);
-    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+    return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
   }, [isDraggingCategories]);
 
   // Bulk delete categories handler
@@ -664,7 +666,12 @@ export default function SettingsPage() {
                 },
                 {
                   onSuccess: () => resolve(),
-                  onError: (error) => reject(error),
+                  onError: (error) =>
+                    reject(
+                      error instanceof Error
+                        ? error
+                        : new Error("Delete failed"),
+                    ),
                 },
               );
             });
@@ -692,7 +699,7 @@ export default function SettingsPage() {
 
       if (failCount > 0) {
         const errorMessage =
-          errors[0] || "Some categories could not be deleted";
+          errors[0] ?? "Some categories could not be deleted";
         toast({
           title: "Some deletions failed",
           description: errorMessage,
@@ -943,7 +950,7 @@ export default function SettingsPage() {
                           selectedCategoryIds.has(category.id)
                             ? "bg-indigo-50"
                             : ""
-                        } ${isDraggingCategories ? "cursor-grabbing" : ""}${isDraggingCategories ? " select-none" : ""}`}
+                        } ${isDraggingCategories ? "cursor-grabbing" : ""}${isDraggingCategories ? "select-none" : ""}`}
                         onMouseDown={(e) => handleCategoryMouseDown(index, e)}
                         onMouseEnter={() => handleCategoryMouseEnter(index)}
                       >

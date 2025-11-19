@@ -817,10 +817,11 @@ function ProductsPageContent() {
     // Don't start drag if clicking directly on checkbox or its children
     if (event?.target instanceof HTMLElement) {
       // Check if clicking on checkbox button or its children (SVG check icon)
-      const isCheckboxClick =
-        event.target.closest('button[type="button"]')?.querySelector("svg") ||
-        event.target.tagName === "svg" ||
-        event.target.closest("[data-state]");
+      const isCheckboxClick = Boolean(
+        (event.target.closest('button[type="button"]')?.querySelector("svg") ??
+        event.target.tagName === "svg") ||
+        event.target.closest("[data-state]")
+      );
 
       if (isCheckboxClick) {
         return;
@@ -907,7 +908,7 @@ function ProductsPageContent() {
             userId: user.id,
           });
           successCount++;
-        } catch (error) {
+        } catch {
           failCount++;
           const product = products.find((p) => p.id === productId);
           if (product) {
