@@ -53,7 +53,7 @@ const SelectTrigger = React.forwardRef<
   <SelectPrimitive.Trigger
     ref={ref}
     className={cn(
-      "flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm ring-offset-white transition-colors placeholder:text-gray-400 hover:border-gray-400 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
+      "flex h-11 w-full items-center justify-between rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm ring-offset-white transition-colors placeholder:text-gray-400 hover:border-gray-400 focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 [&>span]:line-clamp-1",
       className,
     )}
     {...props}
@@ -206,7 +206,7 @@ const SelectItem = React.forwardRef<
     {/* Check icon that appears when item is selected */}
     <span className="absolute left-2 flex h-3.5 w-3.5 items-center justify-center">
       <SelectPrimitive.ItemIndicator>
-        <Check className="h-4 w-4 text-indigo-600" />
+        <Check className="h-4 w-4 text-[#10B981]" />
       </SelectPrimitive.ItemIndicator>
     </span>
 

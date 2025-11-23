@@ -82,9 +82,10 @@ export const Header = () => {
               <Link
                 href={isAdminPage ? "/admin" : "/dashboard"}
                 className="text-2xl font-bold text-gray-800"
+                style={{ fontFamily: 'Satoshi, sans-serif' }}
               >
                 LifeCycle
-                <span className="text-sm leading-none text-purple-500">●</span>
+                <span className="text-[8px] leading-none text-[#10B981]">●</span>
               </Link>
             </div>
 
@@ -96,7 +97,7 @@ export const Header = () => {
                   href={link.path}
                   className={`text-sm font-medium transition-colors ${
                     isActive(link.path)
-                      ? "text-indigo-600"
+                      ? "text-[#10B981]"
                       : "text-gray-500 hover:text-gray-900"
                   }`}
                 >
@@ -184,10 +185,11 @@ export const Header = () => {
                 <Link
                   href={isAdminPage ? "/admin" : "/dashboard"}
                   onClick={handleMobileMenuClose}
-                  className="text-xl font-bold text-gray-800 transition-colors hover:text-purple-600"
+                  className="text-xl font-bold text-gray-800 transition-colors hover:text-[#10B981]"
+                  style={{ fontFamily: 'Satoshi, sans-serif' }}
                 >
                   LifeCycle
-                  <span className="text-sm leading-none text-purple-500">
+                  <span className="text-[8px] leading-none text-[#10B981]">
                     ●
                   </span>
                 </Link>
@@ -210,7 +212,7 @@ export const Header = () => {
                       onClick={handleMobileMenuClose}
                       className={`group flex items-center justify-between rounded-xl px-4 py-4 text-base font-medium transition-all duration-200 hover:scale-[1.02] active:scale-[0.98] ${
                         isActive(link.path)
-                          ? "border border-indigo-100 bg-gradient-to-r from-indigo-50 to-indigo-50 text-indigo-600 shadow-sm"
+                          ? "border border-[#10B981]/20 bg-gradient-to-r from-[#10B981]/10 to-[#10B981]/10 text-[#10B981] shadow-sm"
                           : "text-gray-700 hover:bg-gray-50 active:bg-gray-100"
                       }`}
                       style={{
@@ -242,7 +244,7 @@ export const Header = () => {
                       <ChevronRight
                         className={`h-5 w-5 transition-all duration-200 ${
                           isActive(link.path)
-                            ? "text-indigo-400 group-hover:translate-x-1"
+                            ? "text-[#10B981]/70 group-hover:translate-x-1"
                             : "text-gray-300 group-hover:translate-x-1 group-hover:text-gray-400"
                         }`}
                       />
@@ -268,8 +270,8 @@ export const Header = () => {
                       : "translateX(-20px)",
                   }}
                 >
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-indigo-100 to-indigo-100 ring-2 ring-indigo-200">
-                    <User className="h-6 w-6 text-indigo-600" />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-[#10B981]/20 to-[#10B981]/20 ring-2 ring-[#10B981]/30">
+                    <User className="h-6 w-6 text-[#10B981]" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-semibold text-gray-900">

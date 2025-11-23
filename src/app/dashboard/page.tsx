@@ -224,7 +224,7 @@ export default function DashboardPage() {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#10B981]" />
           <p className="text-gray-500">
             {loading ? 'Loading...' : 'Loading products...'}
           </p>
@@ -265,7 +265,7 @@ export default function DashboardPage() {
             </button>
             <button
               onClick={() => router.push('/products')}
-              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 font-medium"
+              className="px-4 py-2 bg-[#10B981] text-white rounded-lg hover:bg-[#059669] transition-colors flex items-center gap-2 font-medium"
             >
               <Plus className="h-4 w-4" />
               Add Product
@@ -444,7 +444,7 @@ export default function DashboardPage() {
             {/* Upcoming Expirations Timeline */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Calendar className="h-5 w-5 text-indigo-600" />
+                <Calendar className="h-5 w-5 text-[#10B981]" />
                 <h2 className="text-lg font-semibold text-gray-900">
                   Next 30 Days
                 </h2>
@@ -459,9 +459,9 @@ export default function DashboardPage() {
                     const days = getDaysUntilExpiry(product.expiryDate);
                     return (
                       <div key={product.id} className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
-                        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-indigo-100 flex flex-col items-center justify-center">
-                          <span className="text-xs font-bold text-indigo-600">{days}</span>
-                          <span className="text-[10px] text-indigo-600">days</span>
+                        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#10B981]/20 flex flex-col items-center justify-center">
+                          <span className="text-xs font-bold text-[#10B981]">{days}</span>
+                          <span className="text-[10px] text-[#10B981]">days</span>
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-gray-900 text-sm">{product.name}</p>
@@ -485,7 +485,7 @@ export default function DashboardPage() {
             {categoryStats.length > 0 && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <BarChart3 className="h-5 w-5 text-purple-600" />
+                  <BarChart3 className="h-5 w-5 text-[#10B981]" />
                   <h2 className="text-lg font-semibold text-gray-900">
                     Category Health
                   </h2>
@@ -545,10 +545,10 @@ export default function DashboardPage() {
 
             {/* Empty State CTA */}
             {totalProducts === 0 && (
-              <div className="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-lg shadow-sm border border-indigo-100 p-6">
+              <div className="bg-gradient-to-br from-emerald-50 to-[#10B981]/10 rounded-lg shadow-sm border border-emerald-100 p-6">
                 <div className="text-center">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-indigo-100 mb-4">
-                    <TrendingUp className="h-8 w-8 text-indigo-600" />
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#10B981]/20 mb-4">
+                    <TrendingUp className="h-8 w-8 text-[#10B981]" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
                     Start Tracking Today
@@ -558,7 +558,7 @@ export default function DashboardPage() {
                   </p>
                   <button
                     onClick={() => router.push('/products')}
-                    className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors flex items-center gap-2 font-medium mx-auto"
+                    className="px-6 py-3 bg-[#10B981] text-white rounded-lg hover:bg-[#059669] transition-colors flex items-center gap-2 font-medium mx-auto"
                   >
                     <Plus className="h-5 w-5" />
                     Add Your First Product

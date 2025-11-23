@@ -181,7 +181,7 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
             {/* Update Quantity Button */}
             <button
               onClick={() => setShowQuantityModal(true)}
-              className="p-2 rounded-lg hover:bg-white/80 transition-colors text-gray-600 hover:text-indigo-600"
+              className="p-2 rounded-lg hover:bg-white/80 transition-colors text-gray-600 hover:text-[#10B981]"
               title="Update quantity"
             >
               <RefreshCw className="h-4 w-4" />

@@ -310,7 +310,7 @@ export function CategoryModal({
             <Button
               type="submit"
               disabled={isLoading || !name.trim()}
-              className="bg-indigo-600 hover:bg-indigo-700"
+              className="bg-[#10B981] hover:bg-[#059669]"
             >
               {isLoading ? (
                 <>
@@ -367,7 +367,7 @@ export function CategoryModal({
 
             {productsLoading ? (
               <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">
-                <Loader2 className="mr-2 inline h-4 w-4 animate-spin text-indigo-600" />
+                <Loader2 className="mr-2 inline h-4 w-4 animate-spin text-[#10B981]" />
                 Loading products...
               </div>
             ) : products.length === 0 ? (
@@ -381,7 +381,7 @@ export function CategoryModal({
                     key={product.id}
                     className={`rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-900 shadow-sm transition-colors ${
                       selectedProductIds.has(product.id)
-                        ? "bg-indigo-50 ring-2 ring-indigo-500"
+                        ? "bg-[#10B981]/10 ring-2 ring-[#10B981]"
                         : ""
                     } ${isDraggingProducts ? "cursor-grabbing" : ""}`}
                     onMouseDown={() => handleProductMouseDown(index)}
