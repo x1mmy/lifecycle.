@@ -28,7 +28,7 @@ export default function ResetPasswordPage() {
       // Check if there's a hash in the URL with tokens
       const hash = window.location.hash;
 
-      if (hash && hash.includes('access_token')) {
+      if (hash?.includes('access_token')) {
         // Parse the hash to get tokens
         const hashParams = new URLSearchParams(hash.substring(1));
         const accessToken = hashParams.get('access_token');
@@ -70,7 +70,7 @@ export default function ResetPasswordPage() {
       }
     };
 
-    handleSession();
+    void handleSession();
 
     return () => {
       mounted = false;
@@ -115,9 +115,10 @@ export default function ResetPasswordPage() {
       });
 
       // Sign out and redirect to login after a delay
-      setTimeout(async () => {
-        await supabase.auth.signOut();
-        router.push('/login?message=password-reset');
+      setTimeout(() => {
+        void supabase.auth.signOut().then(() => {
+          router.push('/login?message=password-reset');
+        });
       }, 2000);
     } catch (error) {
       console.error('Password reset error:', error);
