@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
   Loader2,
@@ -14,6 +14,7 @@ import {
   Search,
   AlertCircle,
 } from "lucide-react";
+import { Checkbox } from "~/components/ui/checkbox";
 import { useSupabaseAuth } from "~/hooks/useSupabaseAuth";
 import { Header } from "~/components/layout/Header";
 import { api } from "~/trpc/react";
@@ -69,6 +70,24 @@ export default function SettingsPage() {
     id: string;
     name: string;
   } | null>(null);
+
+  /**
+   * Multi-Select State for Categories
+   */
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(
+    new Set(),
+  );
+  const [lastSelectedCategoryIndex, setLastSelectedCategoryIndex] = useState<
+    number | null
+  >(null);
+  const [isDraggingCategories, setIsDraggingCategories] = useState(false);
+  const [dragStartCategoryIndex, setDragStartCategoryIndex] = useState<
+    number | null
+  >(null);
+  const [bulkDeleteCategoriesModalOpen, setBulkDeleteCategoriesModalOpen] =
+    useState(false);
+  const [isBulkDeletingCategories, setIsBulkDeletingCategories] =
+    useState(false);
 
   interface CategoryProductSummary {
     id: string;
@@ -450,6 +469,256 @@ export default function SettingsPage() {
     });
   };
 
+  /**
+   * Category Multi-Select Handlers
+   */
+  // Get filtered categories for selection
+  const filteredCategories = useMemo(() => {
+    if (!categories.length) return [];
+    if (!categorySearchQuery.trim()) return categories;
+    const query = categorySearchQuery.toLowerCase().trim();
+    return categories.filter((category) => {
+      const nameMatch = category.name.toLowerCase().includes(query);
+      const descriptionMatch = category.description
+        ?.toLowerCase()
+        .includes(query);
+      return nameMatch || descriptionMatch;
+    });
+  }, [categories, categorySearchQuery]);
+
+  // Toggle individual category selection
+  const handleToggleCategorySelection = (
+    categoryId: string,
+    index: number,
+    event?: React.MouseEvent,
+  ) => {
+    // Handle shift-click for range selection
+    if (event?.shiftKey && lastSelectedCategoryIndex !== null) {
+      const start = Math.min(lastSelectedCategoryIndex, index);
+      const end = Math.max(lastSelectedCategoryIndex, index);
+      const newSelectedIds = new Set(selectedCategoryIds);
+
+      for (let i = start; i <= end; i++) {
+        if (i < filteredCategories.length) {
+          newSelectedIds.add(filteredCategories[i]!.id);
+        }
+      }
+
+      setSelectedCategoryIds(newSelectedIds);
+      setLastSelectedCategoryIndex(index);
+      return;
+    }
+
+    // Regular toggle
+    const newSelectedIds = new Set(selectedCategoryIds);
+    if (newSelectedIds.has(categoryId)) {
+      newSelectedIds.delete(categoryId);
+    } else {
+      newSelectedIds.add(categoryId);
+    }
+    setSelectedCategoryIds(newSelectedIds);
+    setLastSelectedCategoryIndex(index);
+  };
+
+  // Select all visible categories
+  const handleSelectAllCategories = useCallback(
+    (checked: boolean) => {
+      setSelectedCategoryIds((prevSelectedIds) => {
+        const newSelectedIds = new Set(prevSelectedIds);
+        if (checked) {
+          filteredCategories.forEach((category) => {
+            newSelectedIds.add(category.id);
+          });
+        } else {
+          filteredCategories.forEach((category) => {
+            newSelectedIds.delete(category.id);
+          });
+        }
+        return newSelectedIds;
+      });
+    },
+    [filteredCategories],
+  );
+
+  // Check if all visible categories are selected
+  const allCategoriesSelected = useMemo(() => {
+    if (filteredCategories.length === 0) return false;
+    return filteredCategories.every((category) =>
+      selectedCategoryIds.has(category.id),
+    );
+  }, [filteredCategories, selectedCategoryIds]);
+
+  // Clear all category selections
+  const handleClearCategorySelection = useCallback(() => {
+    setSelectedCategoryIds(new Set());
+    setLastSelectedCategoryIndex(null);
+  }, []);
+
+  // Track the initial selection state when drag starts for categories
+  const dragStartCategorySelectedState = useRef<boolean>(false);
+  const initialCategorySelectionState = useRef<Set<string>>(new Set());
+
+  // Drag selection handlers for categories
+  const handleCategoryMouseDown = (index: number, event?: React.MouseEvent) => {
+    // Don't start drag if clicking directly on checkbox or its children
+    if (event?.target instanceof HTMLElement) {
+      // Check if clicking on checkbox button or its children (SVG check icon)
+      const isCheckboxClick = Boolean(
+        (event.target.closest('button[type="button"]')?.querySelector("svg") ??
+          event.target.tagName === "svg") ||
+          event.target.closest("[data-state]"),
+      );
+
+      if (isCheckboxClick) {
+        return;
+      }
+    }
+
+    setIsDraggingCategories(true);
+    setDragStartCategoryIndex(index);
+    // Remember the initial state of the starting item and all selections
+    const categoryId = filteredCategories[index]!.id;
+    dragStartCategorySelectedState.current =
+      selectedCategoryIds.has(categoryId);
+    initialCategorySelectionState.current = new Set(selectedCategoryIds);
+
+    // Toggle the starting item to the opposite state
+    const newSelectedIds = new Set(selectedCategoryIds);
+    if (dragStartCategorySelectedState.current) {
+      newSelectedIds.delete(categoryId);
+    } else {
+      newSelectedIds.add(categoryId);
+    }
+    setSelectedCategoryIds(newSelectedIds);
+  };
+
+  const handleCategoryMouseEnter = (index: number) => {
+    if (isDraggingCategories && dragStartCategoryIndex !== null) {
+      const start = Math.min(dragStartCategoryIndex, index);
+      const end = Math.max(dragStartCategoryIndex, index);
+
+      // Start with the initial selection state (before drag started)
+      const newSelectedIds = new Set(initialCategorySelectionState.current);
+
+      // Set all items in range to the NEW state (opposite of initial state)
+      // If starting item was initially selected, deselect all in range
+      // If starting item was initially unselected, select all in range
+      const targetState = !dragStartCategorySelectedState.current;
+      for (let i = start; i <= end; i++) {
+        if (i < filteredCategories.length) {
+          if (targetState) {
+            newSelectedIds.add(filteredCategories[i]!.id);
+          } else {
+            newSelectedIds.delete(filteredCategories[i]!.id);
+          }
+        }
+      }
+
+      setSelectedCategoryIds(newSelectedIds);
+    }
+  };
+
+  const handleCategoryMouseUp = () => {
+    setIsDraggingCategories(false);
+    setDragStartCategoryIndex(null);
+    dragStartCategorySelectedState.current = false;
+    initialCategorySelectionState.current = new Set();
+  };
+
+  // Add global mouse up listener to properly end drag selection for categories
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isDraggingCategories) {
+        handleCategoryMouseUp();
+      }
+    };
+
+    window.addEventListener("mouseup", handleGlobalMouseUp);
+    return () => window.removeEventListener("mouseup", handleGlobalMouseUp);
+  }, [isDraggingCategories]);
+
+  // Bulk delete categories handler
+  const handleBulkDeleteCategories = async () => {
+    if (!user || selectedCategoryIds.size === 0) return;
+
+    setIsBulkDeletingCategories(true);
+    const selectedArray = Array.from(selectedCategoryIds);
+    let successCount = 0;
+    let failCount = 0;
+    const failedCategories: string[] = [];
+    const errors: string[] = [];
+
+    try {
+      for (const categoryId of selectedArray) {
+        try {
+          // Use mutateAsync if available, otherwise use mutate with Promise
+          if (deleteCategoryMutation.mutateAsync) {
+            await deleteCategoryMutation.mutateAsync({
+              categoryId,
+              userId: user.id,
+            });
+          } else {
+            await new Promise<void>((resolve, reject) => {
+              deleteCategoryMutation.mutate(
+                {
+                  categoryId,
+                  userId: user.id,
+                },
+                {
+                  onSuccess: () => resolve(),
+                  onError: (error) =>
+                    reject(
+                      error instanceof Error
+                        ? error
+                        : new Error("Delete failed"),
+                    ),
+                },
+              );
+            });
+          }
+          successCount++;
+        } catch (error) {
+          failCount++;
+          const category = categories.find((c) => c.id === categoryId);
+          if (category) {
+            failedCategories.push(category.name);
+            if (error instanceof Error) {
+              errors.push(error.message);
+            }
+          }
+        }
+      }
+
+      if (successCount > 0) {
+        toast({
+          title: "Categories deleted",
+          description: `Successfully deleted ${successCount} categor${successCount !== 1 ? "ies" : "y"}.${failCount > 0 ? ` ${failCount} failed.` : ""}`,
+        });
+        handleClearCategorySelection();
+      }
+
+      if (failCount > 0) {
+        const errorMessage =
+          errors[0] ?? "Some categories could not be deleted";
+        toast({
+          title: "Some deletions failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error during bulk category delete:", error);
+      toast({
+        title: "Error",
+        description: "An error occurred during bulk deletion",
+        variant: "destructive",
+      });
+    } finally {
+      setIsBulkDeletingCategories(false);
+      setBulkDeleteCategoriesModalOpen(false);
+    }
+  };
+
   // Show loading spinner while checking authentication or loading data
   if (loading || profileLoading || notificationLoading) {
     return (
@@ -643,102 +912,206 @@ export default function SettingsPage() {
                   Create First Category
                 </button>
               </div>
+            ) : filteredCategories.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <Search className="mb-4 h-12 w-12 text-gray-300" />
+                <h3 className="mb-2 text-lg font-semibold text-gray-900">
+                  No categories found
+                </h3>
+                <p className="text-gray-500">
+                  No categories match &quot;{categorySearchQuery}&quot;
+                </p>
+              </div>
             ) : (
-              (() => {
-                // Filter categories based on search query
-                const filteredCategories = categories.filter((category) => {
-                  if (!categorySearchQuery.trim()) return true;
-                  const query = categorySearchQuery.toLowerCase().trim();
-                  const nameMatch = category.name.toLowerCase().includes(query);
-                  const descriptionMatch = category.description
-                    ?.toLowerCase()
-                    .includes(query);
-                  return nameMatch || descriptionMatch;
-                });
-
-                return filteredCategories.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-12 text-center">
-                    <Search className="mb-4 h-12 w-12 text-gray-300" />
-                    <h3 className="mb-2 text-lg font-semibold text-gray-900">
-                      No categories found
-                    </h3>
-                    <p className="text-gray-500">
-                      No categories match &quot;{categorySearchQuery}&quot;
-                    </p>
-                  </div>
-                ) : (
-                  <div className="overflow-x-auto">
-                    <table className="w-full">
-                      <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">
-                            NAME
-                          </th>
-                          <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
-                            ACTIONS
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredCategories.map((category) => (
-                          <tr
-                            key={category.id}
-                            className="border-b border-gray-100 transition-colors hover:bg-gray-50"
-                          >
-                            <td className="px-4 py-4">
-                              <div>
-                                <p className="font-medium text-gray-900">
-                                  {category.name}
-                                </p>
-                                {category.description && (
-                                  <p className="mt-1 text-sm text-gray-500">
-                                    {category.description}
-                                  </p>
-                                )}
-                              </div>
-                            </td>
-                            <td className="px-4 py-4">
-                              <div className="flex items-center justify-end gap-2">
-                                <button
-                                  onClick={() =>
-                                    handleOpenEditCategory({
-                                      id: category.id,
-                                      name: category.name,
-                                      description: category.description,
-                                    })
-                                  }
-                                  className="rounded-md px-3 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700"
-                                  disabled={deleteCategoryMutation.isPending}
-                                >
-                                  <span className="hidden sm:inline">Edit</span>
-                                  <Edit className="h-4 w-4 sm:hidden" />
-                                </button>
-                                <button
-                                  onClick={() =>
-                                    handleRequestDeleteCategory({
-                                      id: category.id,
-                                      name: category.name,
-                                    })
-                                  }
-                                  className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
-                                  disabled={deleteCategoryMutation.isPending}
-                                >
-                                  <span className="hidden sm:inline">
-                                    Delete
-                                  </span>
-                                  <Trash2 className="h-4 w-4 sm:hidden" />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              })()
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-200">
+                      <th className="w-12 px-4 py-3 text-left">
+                        <Checkbox
+                          checked={allCategoriesSelected}
+                          onCheckedChange={handleSelectAllCategories}
+                          aria-label="Select all categories"
+                        />
+                      </th>
+                      <th className="px-4 py-3 text-left text-sm font-semibold text-gray-900">
+                        NAME
+                      </th>
+                      <th className="px-4 py-3 text-right text-sm font-semibold text-gray-900">
+                        ACTIONS
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredCategories.map((category, index) => (
+                      <tr
+                        key={category.id}
+                        className={`border-b border-gray-100 transition-colors hover:bg-gray-50 ${
+                          selectedCategoryIds.has(category.id)
+                            ? "bg-indigo-50"
+                            : ""
+                        } ${isDraggingCategories ? "cursor-grabbing" : ""}${isDraggingCategories ? "select-none" : ""}`}
+                        onMouseDown={(e) => handleCategoryMouseDown(index, e)}
+                        onMouseEnter={() => handleCategoryMouseEnter(index)}
+                      >
+                        <td className="w-12 px-4 py-4">
+                          <Checkbox
+                            checked={selectedCategoryIds.has(category.id)}
+                            onCheckedChange={() =>
+                              handleToggleCategorySelection(category.id, index)
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleCategorySelection(
+                                category.id,
+                                index,
+                                e,
+                              );
+                            }}
+                            onMouseDown={(e) => {
+                              e.stopPropagation();
+                            }}
+                            aria-label={`Select ${category.name}`}
+                          />
+                        </td>
+                        <td className="px-4 py-4">
+                          <div>
+                            <p className="font-medium text-gray-900">
+                              {category.name}
+                            </p>
+                            {category.description && (
+                              <p className="mt-1 text-sm text-gray-500">
+                                {category.description}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              onClick={() =>
+                                handleOpenEditCategory({
+                                  id: category.id,
+                                  name: category.name,
+                                  description: category.description,
+                                })
+                              }
+                              className="rounded-md px-3 py-1.5 text-sm font-medium text-blue-600 transition-colors hover:bg-blue-50 hover:text-blue-700"
+                              disabled={deleteCategoryMutation.isPending}
+                            >
+                              <span className="hidden sm:inline">Edit</span>
+                              <Edit className="h-4 w-4 sm:hidden" />
+                            </button>
+                            <button
+                              onClick={() =>
+                                handleRequestDeleteCategory({
+                                  id: category.id,
+                                  name: category.name,
+                                })
+                              }
+                              className="rounded-md px-3 py-1.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 hover:text-red-700"
+                              disabled={deleteCategoryMutation.isPending}
+                            >
+                              <span className="hidden sm:inline">Delete</span>
+                              <Trash2 className="h-4 w-4 sm:hidden" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </div>
+
+          {/* Floating Action Button for Bulk Delete Categories - Desktop/Tablet */}
+          {selectedCategoryIds.size > 0 && (
+            <>
+              <div className="fixed right-6 bottom-6 z-40 hidden transition-all duration-300 md:block">
+                <button
+                  onClick={() => setBulkDeleteCategoriesModalOpen(true)}
+                  className="flex items-center gap-3 rounded-full bg-red-600 px-6 py-4 font-medium text-white shadow-lg transition-all hover:bg-red-700 hover:shadow-xl active:scale-95"
+                  aria-label={`Delete ${selectedCategoryIds.size} selected categor${selectedCategoryIds.size !== 1 ? "ies" : "y"}`}
+                >
+                  <Trash2 className="h-5 w-5" />
+                  <span>
+                    Delete {selectedCategoryIds.size}{" "}
+                    {selectedCategoryIds.size === 1 ? "category" : "categories"}
+                  </span>
+                </button>
+              </div>
+
+              {/* Mobile FAB - Full width on small screens */}
+              <div className="fixed right-0 bottom-0 left-0 z-40 block transition-all duration-300 md:hidden">
+                <div className="border-t border-gray-200 bg-white p-4 shadow-lg">
+                  <button
+                    onClick={() => setBulkDeleteCategoriesModalOpen(true)}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-6 py-3 font-medium text-white transition-colors hover:bg-red-700"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                    <span>
+                      Delete {selectedCategoryIds.size}{" "}
+                      {selectedCategoryIds.size === 1
+                        ? "category"
+                        : "categories"}
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Bulk Delete Categories Confirmation Modal */}
+          {bulkDeleteCategoriesModalOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+              <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
+                <div className="mb-4 flex items-start gap-4">
+                  <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
+                    <AlertCircle className="h-6 w-6 text-red-600" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="mb-1 text-lg font-semibold text-gray-900">
+                      Delete Selected Categories
+                    </h3>
+                    <p className="text-sm text-gray-500">
+                      Are you sure you want to delete{" "}
+                      <span className="font-medium text-gray-900">
+                        {selectedCategoryIds.size} selected categor
+                        {selectedCategoryIds.size !== 1 ? "ies" : "y"}
+                      </span>
+                      ? This action cannot be undone. Categories with products
+                      cannot be deleted.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setBulkDeleteCategoriesModalOpen(false)}
+                    disabled={isBulkDeletingCategories}
+                    className="flex-1 rounded-lg border border-gray-200 px-4 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleBulkDeleteCategories}
+                    disabled={isBulkDeletingCategories}
+                    className="flex-1 rounded-lg bg-red-600 px-4 py-2 font-medium text-white transition-colors hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isBulkDeletingCategories ? (
+                      <>
+                        <Loader2 className="mr-2 inline h-4 w-4 animate-spin" />
+                        Deleting...
+                      </>
+                    ) : (
+                      "Delete"
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Notification Preferences */}
           <div className="rounded-lg border border-gray-100 bg-white p-6 shadow-sm">
@@ -999,6 +1372,7 @@ export default function SettingsPage() {
         productsLoading={categoryProductsQuery.isLoading}
         onEditProduct={handleEditProductFromCategory}
         onDeleteProduct={handleDeleteProductFromCategory}
+        userId={user?.id}
       />
     </div>
   );
