@@ -724,7 +724,7 @@ export default function SettingsPage() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#10B981]" />
           <p className="text-gray-500">Loading...</p>
         </div>
       </div>
@@ -773,7 +773,7 @@ export default function SettingsPage() {
                       setErrors({ ...errors, businessName: "" });
                     }
                   }}
-                  className={`w-full rounded-lg border px-4 py-2 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none ${
+                  className={`w-full rounded-lg border px-4 py-2 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-[#10B981] focus:outline-none ${
                     errors.businessName
                       ? "border-red-300 bg-red-50"
                       : "border-gray-200 bg-gray-50"
@@ -801,7 +801,7 @@ export default function SettingsPage() {
                       setErrors({ ...errors, email: "" });
                     }
                   }}
-                  className={`w-full rounded-lg border px-4 py-2 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none ${
+                  className={`w-full rounded-lg border px-4 py-2 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-[#10B981] focus:outline-none ${
                     errors.email
                       ? "border-red-300 bg-red-50"
                       : "border-gray-200 bg-gray-50"
@@ -823,7 +823,7 @@ export default function SettingsPage() {
                   onChange={(e) =>
                     setProfileData({ ...profileData, phone: e.target.value })
                   }
-                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-[#10B981] focus:outline-none"
                   placeholder="(555) 123-4567"
                 />
               </div>
@@ -837,7 +837,7 @@ export default function SettingsPage() {
                   onChange={(e) =>
                     setProfileData({ ...profileData, address: e.target.value })
                   }
-                  className="w-full resize-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  className="w-full resize-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-[#10B981] focus:outline-none"
                   rows={3}
                   placeholder="123 Main St, City, State 12345"
                 />
@@ -846,7 +846,7 @@ export default function SettingsPage() {
               <button
                 onClick={handleProfileUpdate}
                 disabled={updateProfileMutation.isPending}
-                className="rounded-lg bg-indigo-600 px-6 py-2 font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-[#059669] px-6 py-2 font-medium text-white transition-colors hover:bg-[#059669] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {updateProfileMutation.isPending ? (
                   <>
@@ -868,7 +868,7 @@ export default function SettingsPage() {
               </h2>
               <button
                 onClick={handleOpenAddCategory}
-                className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-medium whitespace-nowrap text-white transition-colors hover:bg-indigo-700"
+                className="flex items-center justify-center gap-2 rounded-lg bg-[#059669] px-4 py-2 font-medium whitespace-nowrap text-white transition-colors hover:bg-[#059669]"
               >
                 <Plus className="h-4 w-4" />
                 <span>Add Category</span>
@@ -885,7 +885,7 @@ export default function SettingsPage() {
                     value={categorySearchQuery}
                     onChange={(e) => setCategorySearchQuery(e.target.value)}
                     placeholder="Search categories by name or description..."
-                    className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pr-4 pl-10 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                    className="w-full rounded-lg border border-gray-200 bg-gray-50 py-2 pr-4 pl-10 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-[#10B981] focus:outline-none"
                   />
                 </div>
               </div>
@@ -893,7 +893,7 @@ export default function SettingsPage() {
 
             {categoriesLoading ? (
               <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-indigo-600" />
+                <Loader2 className="h-6 w-6 animate-spin text-[#10B981]" />
               </div>
             ) : categories.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-12 text-center">
@@ -906,7 +906,7 @@ export default function SettingsPage() {
                 </p>
                 <button
                   onClick={handleOpenAddCategory}
-                  className="flex items-center gap-2 rounded-lg bg-indigo-600 px-6 py-2 font-medium text-white transition-colors hover:bg-indigo-700"
+                  className="flex items-center gap-2 rounded-lg bg-[#059669] px-6 py-2 font-medium text-white transition-colors hover:bg-[#059669]"
                 >
                   <Plus className="h-4 w-4" />
                   Create First Category
@@ -948,7 +948,7 @@ export default function SettingsPage() {
                         key={category.id}
                         className={`border-b border-gray-100 transition-colors hover:bg-gray-50 ${
                           selectedCategoryIds.has(category.id)
-                            ? "bg-indigo-50"
+                            ? "bg-[#059669]/10"
                             : ""
                         } ${isDraggingCategories ? "cursor-grabbing" : ""}${isDraggingCategories ? "select-none" : ""}`}
                         onMouseDown={(e) => handleCategoryMouseDown(index, e)}
@@ -1141,7 +1141,7 @@ export default function SettingsPage() {
                   }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     notifications.dailyExpiryAlerts
-                      ? "bg-indigo-600"
+                      ? "bg-[#059669]"
                       : "bg-gray-200"
                   }`}
                 >
@@ -1171,7 +1171,7 @@ export default function SettingsPage() {
                           alertDays: newValue,
                         });
                       }}
-                      className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-gray-900 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      className="w-full appearance-none rounded-lg border border-gray-200 bg-gray-50 px-4 py-2 text-gray-900 focus:border-transparent focus:bg-white focus:ring-2 focus:ring-[#10B981] focus:outline-none"
                     >
                       <option value={3}>3 days</option>
                       <option value={7}>7 days</option>
@@ -1200,7 +1200,7 @@ export default function SettingsPage() {
                     });
                   }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    notifications.weeklyReport ? "bg-indigo-600" : "bg-gray-200"
+                    notifications.weeklyReport ? "bg-[#059669]" : "bg-gray-200"
                   }`}
                 >
                   <span
@@ -1216,7 +1216,7 @@ export default function SettingsPage() {
             <button
               onClick={handleNotificationUpdate}
               disabled={updateNotificationsMutation.isPending}
-              className="mt-8 rounded-lg bg-indigo-600 px-6 py-2 font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-8 rounded-lg bg-[#059669] px-6 py-2 font-medium text-white transition-colors hover:bg-[#059669] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {updateNotificationsMutation.isPending ? (
                 <>
@@ -1241,7 +1241,7 @@ export default function SettingsPage() {
                     type={showPasswords.current ? 'text' : 'password'}
                     value={passwordData.current}
                     onChange={(e) => setPasswordData({ ...passwordData, current: e.target.value })}
-                    className="w-full px-4 py-2 pr-10 border border-gray-200 bg-gray-50 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white"
+                    className="w-full px-4 py-2 pr-10 border border-gray-200 bg-gray-50 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:border-transparent focus:bg-white"
                     placeholder="Enter current password"
                   />
                   <button
@@ -1261,7 +1261,7 @@ export default function SettingsPage() {
                     type={showPasswords.new ? 'text' : 'password'}
                     value={passwordData.new}
                     onChange={(e) => setPasswordData({ ...passwordData, new: e.target.value })}
-                    className="w-full px-4 py-2 pr-10 border border-gray-200 bg-gray-50 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white"
+                    className="w-full px-4 py-2 pr-10 border border-gray-200 bg-gray-50 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:border-transparent focus:bg-white"
                     placeholder="Enter new password"
                   />
                   <button
@@ -1281,7 +1281,7 @@ export default function SettingsPage() {
                     type={showPasswords.confirm ? 'text' : 'password'}
                     value={passwordData.confirm}
                     onChange={(e) => setPasswordData({ ...passwordData, confirm: e.target.value })}
-                    className="w-full px-4 py-2 pr-10 border border-gray-200 bg-gray-50 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent focus:bg-white"
+                    className="w-full px-4 py-2 pr-10 border border-gray-200 bg-gray-50 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:border-transparent focus:bg-white"
                     placeholder="Confirm new password"
                   />
                   <button
@@ -1297,7 +1297,7 @@ export default function SettingsPage() {
               <button 
                 onClick={handlePasswordReset}
                 disabled={requestPasswordResetMutation.isPending}
-                className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2 bg-[#059669] text-white rounded-lg hover:bg-[#059669] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {requestPasswordResetMutation.isPending ? (
                   <>

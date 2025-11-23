@@ -105,8 +105,8 @@ export const LoginForm = () => {
           {/* Logo & Title */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-6">
-              <div className="bg-[#5146e620] p-4 rounded-2xl">
-                <Package className="h-8 w-8 text-[#5046e6]" />
+              <div className="bg-[#10B98120] p-4 rounded-2xl">
+                <Package className="h-8 w-8 text-[#10B981]" />
               </div>
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Welcome Back</h1>
@@ -167,7 +167,7 @@ export const LoginForm = () => {
 
             <button 
               type="submit" 
-              className="w-full px-4 py-3 bg-[#5046e6] text-white font-medium rounded-lg hover:bg-[#3d34b8] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]" 
+              className="w-full px-4 py-3 bg-[#059669] text-white font-medium rounded-lg hover:bg-[#059669] focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]" 
               disabled={isLoading}
             >
               {isLoading ? 'Logging in...' : 'Log In'}

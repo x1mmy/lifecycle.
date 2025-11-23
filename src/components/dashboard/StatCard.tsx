@@ -28,7 +28,7 @@ interface StatCardProps {
 export const StatCard = ({ title, value, icon: Icon, variant }: StatCardProps) => {
   // Color schemes for different stat types
   const variantStyles = {
-    default: 'bg-indigo-100 text-indigo-600',      // General stats (Total Products)
+    default: 'bg-[#10B981]/20 text-[#10B981]',      // General stats (Total Products)
     warning: 'bg-amber-100 text-amber-600',        // Attention needed (Expiring Soon)
     destructive: 'bg-red-100 text-red-600',        // Critical (Expired)
   };

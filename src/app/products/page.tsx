@@ -725,7 +725,7 @@ function ProductsPageContent() {
       );
     } else {
       return (
-        <span className="inline-flex items-center rounded-full bg-indigo-100 px-2.5 py-0.5 text-xs font-medium text-indigo-800">
+        <span className="inline-flex items-center rounded-full bg-[#059669]/20 px-2.5 py-0.5 text-xs font-medium text-[#059669]">
           {daysUntil}d left
         </span>
       );
@@ -999,7 +999,7 @@ function ProductsPageContent() {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-indigo-600" />
+          <Loader2 className="h-8 w-8 animate-spin text-[#10B981]" />
           <p className="text-gray-500">
             {loading ? "Loading..." : "Loading products..."}
           </p>
@@ -1034,12 +1034,12 @@ function ProductsPageContent() {
               placeholder="Search products..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2 pl-10 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-gray-200 bg-white px-4 py-2 pl-10 text-gray-900 placeholder:text-gray-400 focus:border-transparent focus:ring-2 focus:ring-[#10B981] focus:outline-none"
             />
           </div>
           <button
             onClick={handleAddProduct}
-            className="flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition-colors hover:bg-indigo-700"
+            className="flex items-center justify-center gap-2 rounded-lg bg-[#059669] px-4 py-2 font-medium text-white transition-colors hover:bg-[#059669]"
           >
             <Plus className="h-4 w-4" />
             Add Product
@@ -1052,14 +1052,14 @@ function ProductsPageContent() {
             onClick={() => setActiveFilter("all")}
             className={`rounded-full px-4 py-2 text-sm font-medium transition-all ${
               activeFilter === "all"
-                ? "bg-indigo-600 text-white shadow-md"
-                : "border border-gray-200 bg-white text-gray-700 hover:border-indigo-300 hover:bg-indigo-50"
+                ? "bg-[#059669] text-white shadow-md"
+                : "border border-gray-200 bg-white text-gray-700 hover:border-[#10B981]/50 hover:bg-[#059669]/10"
             }`}
           >
             All
             <span
               className={`ml-2 rounded-full px-2 py-0.5 text-xs ${
-                activeFilter === "all" ? "bg-indigo-500" : "bg-gray-100"
+                activeFilter === "all" ? "bg-[#059669]" : "bg-gray-100"
               }`}
             >
               {filterCounts.all}
@@ -1128,15 +1128,15 @@ function ProductsPageContent() {
             onClick={() => setDateFilterOpen(true)}
             className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition-all ${
               startDate || endDate
-                ? "bg-purple-600 text-white shadow-md"
-                : "border border-gray-200 bg-white text-gray-700 hover:border-purple-300 hover:bg-purple-50"
+                ? "bg-[#059669] text-white shadow-md"
+                : "border border-gray-200 bg-white text-gray-700 hover:border-[#10B981]/50 hover:bg-[#059669]/10"
             }`}
           >
             <Calendar className="h-4 w-4" />
             Filter by Date
             {(startDate || endDate) && (
               <span
-                className={`ml-1 rounded-full bg-purple-500 px-2 py-0.5 text-xs`}
+                className={`ml-1 rounded-full bg-[#059669] px-2 py-0.5 text-xs`}
               >
                 Active
               </span>
@@ -1177,7 +1177,7 @@ function ProductsPageContent() {
                         setStartDate("");
                         setEndDate("");
                       }}
-                      className="text-sm font-medium text-purple-600 hover:text-purple-700"
+                      className="text-sm font-medium text-[#10B981] hover:text-[#059669]"
                     >
                       Clear All
                     </button>
@@ -1200,7 +1200,7 @@ function ProductsPageContent() {
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
-                      className="flex-1 rounded-lg border border-gray-200 px-4 py-3 text-base text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      className="flex-1 rounded-lg border border-gray-200 px-4 py-3 text-base text-gray-900 focus:border-[#10B981] focus:ring-2 focus:ring-[#10B981] focus:outline-none"
                     />
                     {startDate && (
                       <button
@@ -1227,7 +1227,7 @@ function ProductsPageContent() {
                       type="date"
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
-                      className="flex-1 rounded-lg border border-gray-200 px-4 py-3 text-base text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                      className="flex-1 rounded-lg border border-gray-200 px-4 py-3 text-base text-gray-900 focus:border-[#10B981] focus:ring-2 focus:ring-[#10B981] focus:outline-none"
                     />
                     {endDate && (
                       <button
@@ -1246,7 +1246,7 @@ function ProductsPageContent() {
               <div className="border-t border-gray-100 px-6 py-4">
                 <button
                   onClick={() => setDateFilterOpen(false)}
-                  className="w-full rounded-lg bg-purple-600 px-4 py-3 font-medium text-white transition-colors hover:bg-purple-700"
+                  className="w-full rounded-lg bg-[#059669] px-4 py-3 font-medium text-white transition-colors hover:bg-[#059669]"
                 >
                   Done
                 </button>
@@ -1289,7 +1289,7 @@ function ProductsPageContent() {
                         type="date"
                         value={startDate}
                         onChange={(e) => setStartDate(e.target.value)}
-                        className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-[#10B981] focus:ring-2 focus:ring-[#10B981] focus:outline-none"
                       />
                       {startDate && (
                         <button
@@ -1316,7 +1316,7 @@ function ProductsPageContent() {
                         type="date"
                         value={endDate}
                         onChange={(e) => setEndDate(e.target.value)}
-                        className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                        className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:border-[#10B981] focus:ring-2 focus:ring-[#10B981] focus:outline-none"
                       />
                       {endDate && (
                         <button
@@ -1347,7 +1347,7 @@ function ProductsPageContent() {
                 <div className="border-t border-gray-100 px-6 py-4">
                   <button
                     onClick={() => setDateFilterOpen(false)}
-                    className="w-full rounded-lg bg-purple-600 px-4 py-2 font-medium text-white transition-colors hover:bg-purple-700"
+                    className="w-full rounded-lg bg-[#059669] px-4 py-2 font-medium text-white transition-colors hover:bg-[#059669]"
                   >
                     Apply Filter
                   </button>
@@ -1391,7 +1391,7 @@ function ProductsPageContent() {
                         key={product.id}
                         className={`rounded-lg border border-gray-200 bg-white p-3 shadow-sm transition-shadow hover:shadow-md ${
                           selectedIds.has(product.id)
-                            ? "ring-2 ring-indigo-500"
+                            ? "ring-2 ring-[#10B981]"
                             : ""
                         } ${isDragging ? "cursor-grabbing" : ""}${isDragging ? "select-none" : ""}`}
                         onMouseDown={(e) => handleMouseDown(index, e)}
@@ -1428,7 +1428,7 @@ function ProductsPageContent() {
                               <div className="flex shrink-0 gap-1">
                                 <button
                                   onClick={() => handleEditProduct(product)}
-                                  className="rounded p-1.5 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-600"
+                                  className="rounded p-1.5 text-gray-400 transition-colors hover:bg-[#059669]/10 hover:text-[#10B981]"
                                   title="Edit product"
                                 >
                                   <Edit2 className="h-3.5 w-3.5" />
@@ -1501,9 +1501,9 @@ function ProductsPageContent() {
                           Product Name
                           {sortField === "name" ? (
                             sortDirection === "asc" ? (
-                              <ArrowUp className="h-3 w-3 text-indigo-600" />
+                              <ArrowUp className="h-3 w-3 text-[#10B981]" />
                             ) : (
-                              <ArrowDown className="h-3 w-3 text-indigo-600" />
+                              <ArrowDown className="h-3 w-3 text-[#10B981]" />
                             )
                           ) : (
                             <ArrowUpDown className="h-3 w-3" />
@@ -1518,9 +1518,9 @@ function ProductsPageContent() {
                           Category
                           {sortField === "category" ? (
                             sortDirection === "asc" ? (
-                              <ArrowUp className="h-3 w-3 text-indigo-600" />
+                              <ArrowUp className="h-3 w-3 text-[#10B981]" />
                             ) : (
-                              <ArrowDown className="h-3 w-3 text-indigo-600" />
+                              <ArrowDown className="h-3 w-3 text-[#10B981]" />
                             )
                           ) : (
                             <ArrowUpDown className="h-3 w-3" />
@@ -1535,9 +1535,9 @@ function ProductsPageContent() {
                           Expiry Date
                           {sortField === "expiryDate" ? (
                             sortDirection === "asc" ? (
-                              <ArrowUp className="h-3 w-3 text-indigo-600" />
+                              <ArrowUp className="h-3 w-3 text-[#10B981]" />
                             ) : (
-                              <ArrowDown className="h-3 w-3 text-indigo-600" />
+                              <ArrowDown className="h-3 w-3 text-[#10B981]" />
                             )
                           ) : (
                             <ArrowUpDown className="h-3 w-3" />
@@ -1552,9 +1552,9 @@ function ProductsPageContent() {
                           Status
                           {sortField === "status" ? (
                             sortDirection === "asc" ? (
-                              <ArrowUp className="h-3 w-3 text-indigo-600" />
+                              <ArrowUp className="h-3 w-3 text-[#10B981]" />
                             ) : (
-                              <ArrowDown className="h-3 w-3 text-indigo-600" />
+                              <ArrowDown className="h-3 w-3 text-[#10B981]" />
                             )
                           ) : (
                             <ArrowUpDown className="h-3 w-3" />
@@ -1569,9 +1569,9 @@ function ProductsPageContent() {
                           Quantity
                           {sortField === "quantity" ? (
                             sortDirection === "asc" ? (
-                              <ArrowUp className="h-3 w-3 text-indigo-600" />
+                              <ArrowUp className="h-3 w-3 text-[#10B981]" />
                             ) : (
-                              <ArrowDown className="h-3 w-3 text-indigo-600" />
+                              <ArrowDown className="h-3 w-3 text-[#10B981]" />
                             )
                           ) : (
                             <ArrowUpDown className="h-3 w-3" />
@@ -1591,7 +1591,7 @@ function ProductsPageContent() {
                       <tr
                         key={product.id}
                         className={`border-b border-gray-50 transition-colors hover:bg-gray-50 ${
-                          selectedIds.has(product.id) ? "bg-indigo-50" : ""
+                          selectedIds.has(product.id) ? "bg-[#059669]/10" : ""
                         } ${isDragging ? "cursor-grabbing" : ""}${isDragging ? "select-none" : ""}`}
                         onMouseDown={(e) => handleMouseDown(index, e)}
                         onMouseEnter={() => handleMouseEnter(index)}
@@ -1640,7 +1640,7 @@ function ProductsPageContent() {
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => handleEditProduct(product)}
-                              className="p-1 text-gray-400 transition-colors hover:text-indigo-600"
+                              className="p-1 text-gray-400 transition-colors hover:text-[#10B981]"
                               title="Edit product"
                             >
                               <Edit2 className="h-4 w-4" />
@@ -1701,7 +1701,7 @@ function ProductsPageContent() {
                     <select
                       value={pageSize}
                       onChange={(e) => setPageSize(Number(e.target.value))}
-                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-sm focus:ring-2 focus:ring-[#10B981] focus:outline-none"
                     >
                       <option value={10}>10</option>
                       <option value={25}>25</option>
@@ -1746,7 +1746,7 @@ function ProductsPageContent() {
                                 onClick={() => setCurrentPage(page)}
                                 className={`min-w-[2.5rem] rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                                   currentPage === page
-                                    ? "bg-indigo-600 text-white"
+                                    ? "bg-[#059669] text-white"
                                     : "border border-gray-200 hover:bg-white"
                                 }`}
                               >
@@ -1774,8 +1774,8 @@ function ProductsPageContent() {
           ) : (
             /* Empty State */
             <div className="px-4 py-16 text-center">
-              <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-indigo-100">
-                <Package className="h-8 w-8 text-indigo-600" />
+              <div className="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-full bg-[#059669]/20">
+                <Package className="h-8 w-8 text-[#10B981]" />
               </div>
               <h3 className="mb-2 text-lg font-semibold text-gray-900">
                 {searchTerm || activeFilter !== "all"
@@ -1792,7 +1792,7 @@ function ProductsPageContent() {
               {!searchTerm && activeFilter === "all" && (
                 <button
                   onClick={handleAddProduct}
-                  className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 font-medium text-white transition-colors hover:bg-indigo-700"
+                  className="inline-flex items-center gap-2 rounded-lg bg-[#059669] px-4 py-2 font-medium text-white transition-colors hover:bg-[#059669]"
                 >
                   <Plus className="h-4 w-4" />
                   Add Your First Product
@@ -1892,14 +1892,14 @@ function ProductsPageContent() {
                       onClick={() => handleSortSelection(option.value)}
                       className={`w-full rounded-lg px-4 py-4 text-left transition-colors ${
                         isSelected
-                          ? "bg-indigo-50 text-indigo-700"
+                          ? "bg-[#059669]/10 text-[#059669]"
                           : "text-gray-900 hover:bg-gray-50 active:bg-gray-100"
                       }`}
                     >
                       <div className="flex items-center justify-between">
                         <span className="font-medium">{option.label}</span>
                         {isSelected && (
-                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-indigo-600">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#059669]">
                             <svg
                               className="h-4 w-4 text-white"
                               fill="currentColor"
