@@ -81,11 +81,9 @@ export const Header = () => {
             <div className="nav-brand">
               <Link
                 href={isAdminPage ? "/admin" : "/dashboard"}
-                className="text-2xl font-bold text-gray-800"
-                style={{ fontFamily: 'Satoshi, sans-serif' }}
+                className="text-2xl font-bold text-gray-900"
               >
-                LifeCycle
-                <span className="text-[8px] leading-none text-[#10B981]">●</span>
+                LifeCycle<span className="text-[#10B981]">.</span>
               </Link>
             </div>
 
@@ -185,13 +183,9 @@ export const Header = () => {
                 <Link
                   href={isAdminPage ? "/admin" : "/dashboard"}
                   onClick={handleMobileMenuClose}
-                  className="text-xl font-bold text-gray-800 transition-colors hover:text-[#10B981]"
-                  style={{ fontFamily: 'Satoshi, sans-serif' }}
+                  className="text-xl font-bold text-gray-900 transition-colors hover:text-[#10B981]"
                 >
-                  LifeCycle
-                  <span className="text-[8px] leading-none text-[#10B981]">
-                    ●
-                  </span>
+                  LifeCycle<span className="text-[#10B981]">.</span>
                 </Link>
                 <button
                   onClick={handleMobileMenuClose}

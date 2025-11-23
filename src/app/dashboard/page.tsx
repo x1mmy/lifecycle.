@@ -265,7 +265,7 @@ export default function DashboardPage() {
             </button>
             <button
               onClick={() => router.push('/products')}
-              className="px-4 py-2 bg-[#10B981] text-white rounded-lg hover:bg-[#059669] transition-colors flex items-center gap-2 font-medium"
+              className="px-4 py-2 bg-[#059669] text-white rounded-lg hover:bg-[#059669] transition-colors flex items-center gap-2 font-medium"
             >
               <Plus className="h-4 w-4" />
               Add Product
@@ -459,7 +459,7 @@ export default function DashboardPage() {
                     const days = getDaysUntilExpiry(product.expiryDate);
                     return (
                       <div key={product.id} className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
-                        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#10B981]/20 flex flex-col items-center justify-center">
+                        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#059669]/20 flex flex-col items-center justify-center">
                           <span className="text-xs font-bold text-[#10B981]">{days}</span>
                           <span className="text-[10px] text-[#10B981]">days</span>
                         </div>
@@ -547,7 +547,7 @@ export default function DashboardPage() {
             {totalProducts === 0 && (
               <div className="bg-gradient-to-br from-emerald-50 to-[#10B981]/10 rounded-lg shadow-sm border border-emerald-100 p-6">
                 <div className="text-center">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#10B981]/20 mb-4">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#059669]/20 mb-4">
                     <TrendingUp className="h-8 w-8 text-[#10B981]" />
                   </div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
@@ -558,7 +558,7 @@ export default function DashboardPage() {
                   </p>
                   <button
                     onClick={() => router.push('/products')}
-                    className="px-6 py-3 bg-[#10B981] text-white rounded-lg hover:bg-[#059669] transition-colors flex items-center gap-2 font-medium mx-auto"
+                    className="px-6 py-3 bg-[#059669] text-white rounded-lg hover:bg-[#059669] transition-colors flex items-center gap-2 font-medium mx-auto"
                   >
                     <Plus className="h-5 w-5" />
                     Add Your First Product

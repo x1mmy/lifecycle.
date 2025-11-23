@@ -310,7 +310,7 @@ export function CategoryModal({
             <Button
               type="submit"
               disabled={isLoading || !name.trim()}
-              className="bg-[#10B981] hover:bg-[#059669]"
+              className="bg-[#059669] hover:bg-[#059669]"
             >
               {isLoading ? (
                 <>
@@ -381,7 +381,7 @@ export function CategoryModal({
                     key={product.id}
                     className={`rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-900 shadow-sm transition-colors ${
                       selectedProductIds.has(product.id)
-                        ? "bg-[#10B981]/10 ring-2 ring-[#10B981]"
+                        ? "bg-[#059669]/10 ring-2 ring-[#10B981]"
                         : ""
                     } ${isDraggingProducts ? "cursor-grabbing" : ""}`}
                     onMouseDown={() => handleProductMouseDown(index)}

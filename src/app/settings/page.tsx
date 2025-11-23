@@ -846,7 +846,7 @@ export default function SettingsPage() {
               <button
                 onClick={handleProfileUpdate}
                 disabled={updateProfileMutation.isPending}
-                className="rounded-lg bg-[#10B981] px-6 py-2 font-medium text-white transition-colors hover:bg-[#059669] disabled:cursor-not-allowed disabled:opacity-50"
+                className="rounded-lg bg-[#059669] px-6 py-2 font-medium text-white transition-colors hover:bg-[#059669] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {updateProfileMutation.isPending ? (
                   <>
@@ -868,7 +868,7 @@ export default function SettingsPage() {
               </h2>
               <button
                 onClick={handleOpenAddCategory}
-                className="flex items-center justify-center gap-2 rounded-lg bg-[#10B981] px-4 py-2 font-medium whitespace-nowrap text-white transition-colors hover:bg-[#059669]"
+                className="flex items-center justify-center gap-2 rounded-lg bg-[#059669] px-4 py-2 font-medium whitespace-nowrap text-white transition-colors hover:bg-[#059669]"
               >
                 <Plus className="h-4 w-4" />
                 <span>Add Category</span>
@@ -906,7 +906,7 @@ export default function SettingsPage() {
                 </p>
                 <button
                   onClick={handleOpenAddCategory}
-                  className="flex items-center gap-2 rounded-lg bg-[#10B981] px-6 py-2 font-medium text-white transition-colors hover:bg-[#059669]"
+                  className="flex items-center gap-2 rounded-lg bg-[#059669] px-6 py-2 font-medium text-white transition-colors hover:bg-[#059669]"
                 >
                   <Plus className="h-4 w-4" />
                   Create First Category
@@ -948,7 +948,7 @@ export default function SettingsPage() {
                         key={category.id}
                         className={`border-b border-gray-100 transition-colors hover:bg-gray-50 ${
                           selectedCategoryIds.has(category.id)
-                            ? "bg-[#10B981]/10"
+                            ? "bg-[#059669]/10"
                             : ""
                         } ${isDraggingCategories ? "cursor-grabbing" : ""}${isDraggingCategories ? "select-none" : ""}`}
                         onMouseDown={(e) => handleCategoryMouseDown(index, e)}
@@ -1141,7 +1141,7 @@ export default function SettingsPage() {
                   }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
                     notifications.dailyExpiryAlerts
-                      ? "bg-[#10B981]"
+                      ? "bg-[#059669]"
                       : "bg-gray-200"
                   }`}
                 >
@@ -1200,7 +1200,7 @@ export default function SettingsPage() {
                     });
                   }}
                   className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                    notifications.weeklyReport ? "bg-[#10B981]" : "bg-gray-200"
+                    notifications.weeklyReport ? "bg-[#059669]" : "bg-gray-200"
                   }`}
                 >
                   <span
@@ -1216,7 +1216,7 @@ export default function SettingsPage() {
             <button
               onClick={handleNotificationUpdate}
               disabled={updateNotificationsMutation.isPending}
-              className="mt-8 rounded-lg bg-[#10B981] px-6 py-2 font-medium text-white transition-colors hover:bg-[#059669] disabled:cursor-not-allowed disabled:opacity-50"
+              className="mt-8 rounded-lg bg-[#059669] px-6 py-2 font-medium text-white transition-colors hover:bg-[#059669] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {updateNotificationsMutation.isPending ? (
                 <>
@@ -1297,7 +1297,7 @@ export default function SettingsPage() {
               <button 
                 onClick={handlePasswordReset}
                 disabled={requestPasswordResetMutation.isPending}
-                className="px-6 py-2 bg-[#10B981] text-white rounded-lg hover:bg-[#059669] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-6 py-2 bg-[#059669] text-white rounded-lg hover:bg-[#059669] transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {requestPasswordResetMutation.isPending ? (
                   <>

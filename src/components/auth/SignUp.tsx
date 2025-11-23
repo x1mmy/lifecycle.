@@ -202,7 +202,7 @@ export const SignUpForm = () => {
 
               <button 
                 type="submit" 
-                className="w-full px-4 py-3 bg-[#10B981] text-white font-medium rounded-lg hover:bg-[#059669] focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]" 
+                className="w-full px-4 py-3 bg-[#059669] text-white font-medium rounded-lg hover:bg-[#059669] focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]" 
                 disabled={loading}
               >
                 {loading ? 'Creating Account...' : 'Create Account'}
