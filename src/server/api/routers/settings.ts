@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { supabaseAdmin } from "~/lib/supabase-admin";
+import { sendPasswordResetEmail } from "~/lib/email-service";
 
 /**
  * Settings Router
@@ -432,12 +433,13 @@ export const settingsRouter = createTRPCRouter({
   /**
    * Request Password Reset
    *
-   * Initiates Supabase's built-in password reset flow
-   * Sends an email with a magic link for password reset
+   * Initiates password reset flow with custom branded email via Resend
+   * Uses Supabase to generate the secure reset token, then sends custom email
    *
    * tRPC Pattern Explanation:
    * - .mutation() for initiating the reset process
-   * - Uses Supabase Auth API directly (not database)
+   * - Uses Supabase Auth API to generate reset link
+   * - Sends custom branded email via Resend
    * - Returns success status rather than user data
    * - Error handling for auth-specific issues
    *
@@ -448,22 +450,41 @@ export const settingsRouter = createTRPCRouter({
     .input(passwordResetSchema)
     .mutation(async ({ input }) => {
       try {
-        // Use Supabase Auth API to send password reset email
-        const { error } = await supabaseAdmin.auth.resetPasswordForEmail(
-          input.email,
-          {
-            // Redirect URL after user clicks the reset link
-            // This should point to your app's password reset page
-            redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/auth/reset-password`,
+        const redirectTo = `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/auth/reset-password`;
+
+        // Generate the reset link using Supabase Admin API
+        const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+          type: "recovery",
+          email: input.email,
+          options: {
+            redirectTo,
           },
-        );
+        });
 
         if (error) {
           console.error("[Settings requestPasswordReset Error]", error);
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to send password reset email",
-          });
+          // Don't reveal if email exists - return success anyway
+          return {
+            success: true,
+            message:
+              "If an account with this email exists, you will receive a password reset link.",
+          };
+        }
+
+        // Send custom branded email via Resend
+        if (data?.properties?.action_link) {
+          const emailResult = await sendPasswordResetEmail(
+            input.email,
+            data.properties.action_link,
+          );
+
+          if (!emailResult.success) {
+            console.error(
+              "[Settings requestPasswordReset] Failed to send email:",
+              emailResult.error,
+            );
+            // Still return success to not reveal email existence
+          }
         }
 
         // Always return success for security (don't reveal if email exists)
