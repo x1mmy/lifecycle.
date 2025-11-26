@@ -88,6 +88,72 @@ const productInputSchema = z.object({
   barcode: z.string().optional(),
 });
 
+/**
+ * Helper function to ensure a category exists in the categories table
+ * If the category doesn't exist, it will be created automatically
+ * This links product categories to the settings categories table
+ *
+ * @param userId - The user's ID
+ * @param categoryName - The category name to ensure exists
+ * @returns void (creates category if needed, silently handles errors)
+ */
+async function ensureCategoryExists(
+  userId: string,
+  categoryName: string,
+): Promise<void> {
+  if (!categoryName?.trim()) {
+    return; // Skip empty categories
+  }
+
+  const trimmedCategory = categoryName.trim();
+
+  try {
+    // Check if category already exists for this user
+    const { data: existingCategory } = await supabaseAdmin
+      .from("categories")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("name", trimmedCategory)
+      .maybeSingle();
+
+    // If category doesn't exist, create it
+    if (!existingCategory) {
+      const { error: createError } = await supabaseAdmin
+        .from("categories")
+        .insert({
+          user_id: userId,
+          name: trimmedCategory,
+          description: null, // Auto-created categories have no description
+          updated_at: new Date().toISOString(),
+        });
+
+      if (createError) {
+        // Log error but don't throw - product creation should still succeed
+        // Common errors: table doesn't exist (migration not run), unique constraint (race condition)
+        if (createError.code !== "23505") {
+          // Not a duplicate error, log it
+          console.log(
+            `[Products] Failed to auto-create category "${trimmedCategory}":`,
+            createError.message,
+          );
+        }
+        // If it's a duplicate (23505), another request created it - that's fine
+      } else {
+        console.log(
+          `[Products] Auto-created category "${trimmedCategory}" for user`,
+        );
+      }
+    }
+  } catch (error) {
+    // Silently handle errors - don't fail product creation if category sync fails
+    // This ensures the feature works even if categories table doesn't exist yet
+    console.log(
+      `[Products] Category sync skipped for "${trimmedCategory}":`,
+      error instanceof Error ? error.message : "Unknown error",
+    );
+  }
+}
+
 export const productsRouter = createTRPCRouter({
   /**
    * Get All Products
@@ -150,6 +216,12 @@ export const productsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
+        // ═══════════════════════════════════════════════════════════
+        // STEP 0: Ensure category exists in categories table
+        // This links product categories to the settings categories
+        // ═══════════════════════════════════════════════════════════
+        await ensureCategoryExists(input.userId, input.product.category);
+
         // ═══════════════════════════════════════════════════════════
         // STEP 1: Save to products table (user's inventory)
         // ═══════════════════════════════════════════════════════════
@@ -244,6 +316,12 @@ export const productsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
+        // ═══════════════════════════════════════════════════════════
+        // STEP 0: Ensure category exists in categories table
+        // This links product categories to the settings categories
+        // ═══════════════════════════════════════════════════════════
+        await ensureCategoryExists(input.userId, input.product.category);
+
         // ═══════════════════════════════════════════════════════════
         // STEP 1: Update product in products table
         // ═══════════════════════════════════════════════════════════
@@ -478,7 +556,8 @@ export const productsRouter = createTRPCRouter({
   /**
    * Get All Categories
    *
-   * Retrieves all unique categories from existing products
+   * Retrieves categories from the categories table (managed categories)
+   * Falls back to extracting from products if categories table doesn't exist
    * Used for populating category dropdown in add product form
    *
    * @input userId - The authenticated user's ID
@@ -492,6 +571,21 @@ export const productsRouter = createTRPCRouter({
     )
     .query(async ({ input }) => {
       try {
+        // Try to get categories from the categories table first
+        const { data: categoriesData, error: categoriesError } =
+          await supabaseAdmin
+            .from("categories")
+            .select("name")
+            .eq("user_id", input.userId)
+            .order("name", { ascending: true });
+
+        // If categories table exists and has data, use it
+        if (!categoriesError && categoriesData && categoriesData.length > 0) {
+          return categoriesData.map((cat) => cat.name);
+        }
+
+        // Fallback: Extract categories from products (backward compatibility)
+        // This handles cases where categories table doesn't exist yet
         const { data, error } = await supabaseAdmin
           .from("products")
           .select("category")
@@ -512,13 +606,16 @@ export const productsRouter = createTRPCRouter({
         )
           .filter(
             (category): category is string =>
-              typeof category === 'string' && category.trim() !== "" && category !== "-",
+              typeof category === "string" &&
+              category.trim() !== "" &&
+              category !== "-",
           )
           .sort();
 
         return uniqueCategories;
       } catch (error) {
         console.error("[Products getCategories Error]", error);
+        if (error instanceof TRPCError) throw error;
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
           message: "Failed to fetch categories",

@@ -255,6 +255,99 @@ export interface UserEmailData {
 }
 
 /**
+ * Generate HTML for password reset email
+ * Clean, branded email for password reset requests
+ */
+function generatePasswordResetHTML(resetLink: string): string {
+  return `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Reset Your Password - LifeCycle</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #374151; margin: 0; padding: 0; background-color: #f9fafb;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);">
+          <div style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); color: white; padding: 32px 24px; text-align: center;">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 600;">🔐 Password Reset Request</h1>
+            <p style="margin: 8px 0 0 0; opacity: 0.9; font-size: 16px;">LifeCycle Account Security</p>
+          </div>
+
+          <div style="padding: 32px 24px;">
+            <p style="margin: 0 0 16px 0;">Hello,</p>
+
+            <p style="margin: 0 0 24px 0;">We received a request to reset the password for your LifeCycle account. Click the button below to create a new password:</p>
+
+            <div style="text-align: center; margin: 32px 0;">
+              <a href="${resetLink}" style="display: inline-block; background-color: #6366f1; color: white; text-decoration: none; padding: 14px 32px; border-radius: 6px; font-weight: 500; font-size: 16px;">Reset Password</a>
+            </div>
+
+            <p style="margin: 0 0 16px 0; font-size: 14px; color: #6b7280;">This link will expire in 1 hour for security reasons.</p>
+
+            <div style="background-color: #fef3c7; border: 1px solid #fcd34d; border-radius: 6px; padding: 16px; margin: 24px 0;">
+              <p style="margin: 0; color: #92400e; font-size: 14px;">
+                <strong>Didn't request this?</strong><br>
+                If you didn't request a password reset, you can safely ignore this email. Your password will remain unchanged.
+              </p>
+            </div>
+
+            <p style="font-size: 14px; color: #6b7280; margin-top: 24px;">If the button doesn't work, copy and paste this link into your browser:</p>
+            <p style="font-size: 12px; color: #9ca3af; word-break: break-all; margin: 8px 0 0 0;">${resetLink}</p>
+          </div>
+
+          <div style="background-color: #f9fafb; padding: 24px; text-align: center; border-top: 1px solid #e5e7eb;">
+            <p style="margin: 0; color: #6b7280; font-size: 14px;">© 2024 LifeCycle. All rights reserved.</p>
+            <p style="margin: 0; color: #6b7280; font-size: 14px;">lifecycle.cloud | Product Lifecycle Management</p>
+          </div>
+        </div>
+      </body>
+    </html>
+  `;
+}
+
+/**
+ * Send password reset email to a user
+ * Uses custom branded template via Resend
+ *
+ * @param email - User's email address
+ * @param resetLink - The password reset link from Supabase
+ * @returns Success status and optional error message
+ */
+export async function sendPasswordResetEmail(
+  email: string,
+  resetLink: string
+): Promise<{ success: boolean; error?: string; emailId?: string }> {
+  try {
+    if (!process.env.RESEND_API_KEY) {
+      throw new Error('RESEND_API_KEY environment variable is not set');
+    }
+
+    const emailHtml = generatePasswordResetHTML(resetLink);
+
+    const data = await resend.emails.send({
+      from: 'LifeCycle <notifications@lifecycle.cloud>',
+      to: [email],
+      subject: 'Reset Your Password - LifeCycle',
+      html: emailHtml,
+    });
+
+    console.log(`✅ Password reset email sent to ${email}, ID: ${data.data?.id}`);
+
+    return {
+      success: true,
+      emailId: data.data?.id,
+    };
+  } catch (error) {
+    console.error(`❌ Error sending password reset email to ${email}:`, error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
  * Send daily expiry alert email to a user
  * This is the consolidated daily notification that combines the functionality
  * of the previous "Email Alerts" and "Daily Summary" features.

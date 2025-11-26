@@ -85,7 +85,7 @@ export const QuantityUpdateModal = ({
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 p-4">
           <div className="flex items-center gap-2">
-            <Package className="h-5 w-5 text-indigo-600" />
+            <Package className="h-5 w-5 text-[#10B981]" />
             <h2 className="text-lg font-semibold text-gray-900">
               Update Quantity
             </h2>

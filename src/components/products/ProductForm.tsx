@@ -479,7 +479,7 @@ export const ProductForm = ({
                     {/* Add new category option at the top */}
                     <SelectItem
                       value="__new__"
-                      className="font-medium text-indigo-600 hover:bg-indigo-50 hover:text-indigo-700"
+                      className="font-medium text-[#10B981] hover:bg-[#10B981]/10 hover:text-[#059669]"
                     >
                       + Add new category
                     </SelectItem>
