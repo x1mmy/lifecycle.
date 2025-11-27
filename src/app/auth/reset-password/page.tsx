@@ -138,7 +138,7 @@ export default function ResetPasswordPage() {
       <div className="min-h-screen bg-white flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="bg-white rounded-2xl shadow-2xl p-8 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#5046e6] mx-auto mb-4"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#10B981] mx-auto mb-4"></div>
             <p className="text-gray-600">Verifying reset link...</p>
           </div>
         </div>
@@ -166,7 +166,7 @@ export default function ResetPasswordPage() {
 
             <Link
               href="/forgot-password"
-              className="block w-full px-4 py-3 bg-[#5046e6] text-white font-medium rounded-lg hover:bg-[#3d34b8] text-center transition-all"
+              className="block w-full px-4 py-3 bg-[#059669] text-white font-medium rounded-lg hover:bg-[#047857] text-center transition-all"
             >
               Request New Link
             </Link>
@@ -206,8 +206,8 @@ export default function ResetPasswordPage() {
           {/* Logo & Title */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-6">
-              <div className="bg-[#5146e620] p-4 rounded-2xl">
-                <Package className="h-8 w-8 text-[#5046e6]" />
+              <div className="bg-[#059669]/10 p-4 rounded-2xl">
+                <Package className="h-8 w-8 text-[#059669]" />
               </div>
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Reset Password</h1>
@@ -229,7 +229,7 @@ export default function ResetPasswordPage() {
                     setPassword(e.target.value);
                     setErrors({ ...errors, password: undefined });
                   }}
-                  className={`w-full px-4 py-3 border rounded-lg bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all pr-12 text-gray-900 placeholder-gray-500 ${errors.password ? 'border-red-500' : 'border-gray-200'}`}
+                  className={`w-full px-4 py-3 border rounded-lg bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:border-transparent transition-all pr-12 text-gray-900 placeholder-gray-500 ${errors.password ? 'border-red-500' : 'border-gray-200'}`}
                   placeholder="Enter new password"
                 />
                 <button
@@ -261,7 +261,7 @@ export default function ResetPasswordPage() {
                     setConfirmPassword(e.target.value);
                     setErrors({ ...errors, confirmPassword: undefined });
                   }}
-                  className={`w-full px-4 py-3 border rounded-lg bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all pr-12 text-gray-900 placeholder-gray-500 ${errors.confirmPassword ? 'border-red-500' : 'border-gray-200'}`}
+                  className={`w-full px-4 py-3 border rounded-lg bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:border-transparent transition-all pr-12 text-gray-900 placeholder-gray-500 ${errors.confirmPassword ? 'border-red-500' : 'border-gray-200'}`}
                   placeholder="Confirm new password"
                 />
                 <button
@@ -279,7 +279,7 @@ export default function ResetPasswordPage() {
 
             <button
               type="submit"
-              className="w-full px-4 py-3 bg-[#5046e6] text-white font-medium rounded-lg hover:bg-[#3d34b8] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full px-4 py-3 bg-[#059669] text-white font-medium rounded-lg hover:bg-[#047857] focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
               disabled={isLoading}
             >
               {isLoading ? 'Resetting...' : 'Reset Password'}
