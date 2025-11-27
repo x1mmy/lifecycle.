@@ -81,7 +81,7 @@ export default function ForgotPasswordPage() {
 
               <Link
                 href="/login"
-                className="block w-full px-4 py-3 bg-[#5046e6] text-white font-medium rounded-lg hover:bg-[#3d34b8] text-center transition-all"
+                className="block w-full px-4 py-3 bg-[#059669] text-white font-medium rounded-lg hover:bg-[#047857] text-center transition-all"
               >
                 Back to Login
               </Link>
@@ -99,8 +99,8 @@ export default function ForgotPasswordPage() {
           {/* Logo & Title */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-6">
-              <div className="bg-[#5146e620] p-4 rounded-2xl">
-                <Package className="h-8 w-8 text-[#5046e6]" />
+              <div className="bg-[#059669]/10 p-4 rounded-2xl">
+                <Package className="h-8 w-8 text-[#059669]" />
               </div>
             </div>
             <h1 className="text-2xl font-bold text-gray-900 mb-2">Forgot Password?</h1>
@@ -121,7 +121,7 @@ export default function ForgotPasswordPage() {
                   setEmail(e.target.value);
                   setError(undefined);
                 }}
-                className={`w-full px-4 py-3 border rounded-lg bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900 placeholder-gray-500 ${error ? 'border-red-500' : 'border-gray-200'}`}
+                className={`w-full px-4 py-3 border rounded-lg bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:border-transparent transition-all text-gray-900 placeholder-gray-500 ${error ? 'border-red-500' : 'border-gray-200'}`}
                 placeholder="you@business.com"
               />
               {error && (
@@ -131,7 +131,7 @@ export default function ForgotPasswordPage() {
 
             <button
               type="submit"
-              className="w-full px-4 py-3 bg-[#5046e6] text-white font-medium rounded-lg hover:bg-[#3d34b8] focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full px-4 py-3 bg-[#059669] text-white font-medium rounded-lg hover:bg-[#047857] focus:outline-none focus:ring-2 focus:ring-[#10B981] focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all transform hover:scale-[1.02] active:scale-[0.98]"
               disabled={requestReset.isPending}
             >
               {requestReset.isPending ? 'Sending...' : 'Send Reset Link'}
