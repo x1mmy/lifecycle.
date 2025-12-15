@@ -819,8 +819,8 @@ function ProductsPageContent() {
       // Check if clicking on checkbox button or its children (SVG check icon)
       const isCheckboxClick = Boolean(
         (event.target.closest('button[type="button"]')?.querySelector("svg") ??
-        event.target.tagName === "svg") ||
-        event.target.closest("[data-state]")
+          event.target.tagName === "svg") ||
+          event.target.closest("[data-state]"),
       );
 
       if (isCheckboxClick) {
@@ -1932,16 +1932,24 @@ function ProductsPageContent() {
           </div>
         )}
 
-        {/* Floating Action Button for Bulk Delete - Desktop/Tablet */}
+        {/* Floating Action Buttons for Bulk Operations - Desktop/Tablet */}
         {selectedIds.size > 0 && (
           <>
-            <div className="fixed right-6 bottom-6 z-40 hidden transition-all duration-300 md:block">
+            <div className="fixed right-6 bottom-6 z-40 hidden flex-col gap-2 transition-all duration-300 md:flex">
+              <button
+                onClick={handleClearSelection}
+                className="flex items-center gap-2 rounded-full border-2 border-gray-300 bg-white px-5 py-2.5 text-sm font-medium text-gray-700 shadow-lg transition-all hover:bg-gray-50 hover:shadow-xl active:scale-95"
+                aria-label="Unselect all products"
+              >
+                <X className="h-4 w-4" />
+                <span>Unselect All</span>
+              </button>
               <button
                 onClick={() => setBulkDeleteModalOpen(true)}
-                className="flex items-center gap-3 rounded-full bg-red-600 px-6 py-4 font-medium text-white shadow-lg transition-all hover:bg-red-700 hover:shadow-xl active:scale-95"
+                className="flex items-center gap-2 rounded-full bg-red-600 px-5 py-2.5 text-sm font-medium text-white shadow-lg transition-all hover:bg-red-700 hover:shadow-xl active:scale-95"
                 aria-label={`Delete ${selectedIds.size} selected product${selectedIds.size !== 1 ? "s" : ""}`}
               >
-                <Trash2 className="h-5 w-5" />
+                <Trash2 className="h-4 w-4" />
                 <span>
                   Delete {selectedIds.size}{" "}
                   {selectedIds.size === 1 ? "product" : "products"}
@@ -1951,17 +1959,26 @@ function ProductsPageContent() {
 
             {/* Mobile FAB - Full width on small screens */}
             <div className="fixed right-0 bottom-0 left-0 z-40 block transition-all duration-300 md:hidden">
-              <div className="border-t border-gray-200 bg-white p-4 shadow-lg">
-                <button
-                  onClick={() => setBulkDeleteModalOpen(true)}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-6 py-3 font-medium text-white transition-colors hover:bg-red-700"
-                >
-                  <Trash2 className="h-5 w-5" />
-                  <span>
-                    Delete {selectedIds.size}{" "}
-                    {selectedIds.size === 1 ? "product" : "products"}
-                  </span>
-                </button>
+              <div className="border-t border-gray-200 bg-white p-3 shadow-lg">
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleClearSelection}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border-2 border-gray-300 bg-white px-3 py-2.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  >
+                    <X className="h-4 w-4" />
+                    <span>Clear</span>
+                  </button>
+                  <button
+                    onClick={() => setBulkDeleteModalOpen(true)}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-red-700"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>
+                      Delete {selectedIds.size}{" "}
+                      {selectedIds.size === 1 ? "product" : "products"}
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
           </>
