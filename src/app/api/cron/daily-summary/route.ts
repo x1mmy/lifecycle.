@@ -22,11 +22,15 @@ interface DatabaseProduct {
   id: string;
   name: string;
   category: string;
-  expiry_date: string;
-  quantity: number;
-  batch_number?: string;
   supplier?: string;
-  location?: string;
+}
+
+interface DatabaseBatch {
+  id: string;
+  product_id: string;
+  batch_number?: string;
+  expiry_date: string;
+  quantity: number | null;
 }
 
 interface SupabaseError {
@@ -61,10 +65,9 @@ function calculateDaysUntilExpiry(expiryDate: string): number {
 
 /**
  * Daily cron job to send daily expiry alerts
- * This is the consolidated daily notification that replaces the previous separate
- * "Email Alerts" and "Daily Summary" cron jobs.
- * 
- * Purpose: Send daily operational emails with ALL products expiring within user's alert threshold
+ * Updated to work with product_batches architecture
+ *
+ * Purpose: Send daily operational emails with ALL batches expiring within user's alert threshold
  * Frequency: Daily at 9:00 AM UTC
  * Audience: Users who have daily_expiry_alerts_enabled = true
  */
@@ -73,16 +76,15 @@ export async function GET(request: NextRequest) {
     // Verify CRON_SECRET for security
     const authHeader = request.headers.get('Authorization');
     const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
-    
+
     if (!authHeader || authHeader !== expectedAuth) {
       console.error('❌ Unauthorized cron job request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log('🚀 Starting daily expiry alert cron job...');
+    console.log('🚀 Starting daily expiry alert cron job (batch architecture)...');
 
     // Get all users who have daily expiry alerts enabled
-    // First get settings, then get profiles separately to avoid foreign key relationship issues
     const { data: settings, error: settingsError } = await supabase
       .from('settings')
       .select('user_id, alert_threshold, daily_expiry_alerts_enabled')
@@ -95,7 +97,7 @@ export async function GET(request: NextRequest) {
 
     if (!settings || settings.length === 0) {
       console.log('ℹ️ No users found with daily expiry alerts enabled');
-      return NextResponse.json({ 
+      return NextResponse.json({
         message: 'No users with daily expiry alerts enabled',
         processed: 0,
         emails_sent: 0
@@ -138,7 +140,7 @@ export async function GET(request: NextRequest) {
     for (const userSetting of users) {
       try {
         const profile = userSetting.profiles;
-        
+
         // Skip inactive users
         if (!profile.is_active) {
           console.log(`⏭️ Skipping inactive user: ${profile.email}`);
@@ -147,19 +149,17 @@ export async function GET(request: NextRequest) {
 
         processedUsers++;
 
-        // Get products expiring within the user's alert threshold
+        // Get batches expiring within the user's alert threshold
         const today = new Date().toISOString().split('T')[0];
         const thresholdDate = new Date();
         thresholdDate.setDate(thresholdDate.getDate() + userSetting.alert_threshold);
         const thresholdDateStr = thresholdDate.toISOString().split('T')[0];
 
-        const { data: products, error: productsError } = await supabase
+        // Step 1: Get all products for this user
+        const { data: userProducts, error: productsError } = await supabase
           .from('products')
-          .select('*')
-          .eq('user_id', profile.id)
-          .gte('expiry_date', today)
-          .lte('expiry_date', thresholdDateStr)
-          .order('expiry_date', { ascending: true }) as { data: DatabaseProduct[] | null; error: SupabaseError | null };
+          .select('id, name, category, supplier')
+          .eq('user_id', profile.id) as { data: DatabaseProduct[] | null; error: SupabaseError | null };
 
         if (productsError) {
           console.error(`❌ Error fetching products for ${profile.email}:`, productsError);
@@ -167,24 +167,48 @@ export async function GET(request: NextRequest) {
           continue;
         }
 
-        // Skip if no products expiring
-        if (!products || products.length === 0) {
-          console.log(`ℹ️ No expiring products for ${profile.email}`);
+        if (!userProducts || userProducts.length === 0) {
+          console.log(`ℹ️ No products found for ${profile.email}`);
           continue;
         }
 
-        // Transform products to include days until expiry
-        const productsWithDays: Product[] = products.map(product => ({
-          id: product.id,
-          name: product.name,
-          category: product.category,
-          expiry_date: product.expiry_date,
-          quantity: product.quantity,
-          batch_number: product.batch_number,
-          supplier: product.supplier,
-          location: product.location,
-          days_until_expiry: calculateDaysUntilExpiry(product.expiry_date),
-        }));
+        // Step 2: Get batches expiring within threshold
+        const productIds = userProducts.map(p => p.id);
+        const { data: batches, error: batchesError } = await supabase
+          .from('product_batches')
+          .select('*')
+          .in('product_id', productIds)
+          .gte('expiry_date', today!)
+          .lte('expiry_date', thresholdDateStr!)
+          .order('expiry_date', { ascending: true }) as { data: DatabaseBatch[] | null; error: SupabaseError | null };
+
+        if (batchesError) {
+          console.error(`❌ Error fetching batches for ${profile.email}:`, batchesError);
+          errors.push(`Failed to fetch batches for ${profile.email}`);
+          continue;
+        }
+
+        // Skip if no batches expiring
+        if (!batches || batches.length === 0) {
+          console.log(`ℹ️ No expiring batches for ${profile.email}`);
+          continue;
+        }
+
+        // Step 3: Combine batch data with product info for email
+        const productsForEmail: Product[] = batches.map(batch => {
+          const product = userProducts.find(p => p.id === batch.product_id);
+          return {
+            id: batch.id,
+            name: product?.name ?? 'Unknown Product',
+            category: product?.category ?? 'Unknown',
+            expiry_date: batch.expiry_date,
+            quantity: batch.quantity ?? 0,
+            batch_number: batch.batch_number,
+            supplier: product?.supplier,
+            location: undefined,
+            days_until_expiry: calculateDaysUntilExpiry(batch.expiry_date),
+          };
+        });
 
         // Send email
         const userData: UserEmailData = {
@@ -194,11 +218,11 @@ export async function GET(request: NextRequest) {
           alert_threshold: userSetting.alert_threshold,
         };
 
-        const result = await sendDailyExpiryAlert(userData, productsWithDays);
+        const result = await sendDailyExpiryAlert(userData, productsForEmail);
 
         if (result.success) {
           emailsSent++;
-          console.log(`✅ Sent expiry alert to ${profile.email} for ${products.length} products`);
+          console.log(`✅ Sent expiry alert to ${profile.email} for ${batches.length} batches`);
         } else {
           console.error(`❌ Failed to send email to ${profile.email}:`, result.error);
           errors.push(`Failed to send email to ${profile.email}: ${result.error}`);
@@ -225,7 +249,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('❌ Daily cron job failed:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Internal server error',
         message: error instanceof Error ? error.message : 'Unknown error'
       },

@@ -10,14 +10,28 @@ export interface Product {
     id: string;
     name: string;
     category: string;
-    expiryDate: string;
-    quantity: number | null;
-    batchNumber?: string;
     supplier?: string;
     location?: string;
     notes?: string;
     barcode?: string;
     addedDate: string;
+    batches?: ProductBatch[]; // Batches associated with this product
+    // TEMPORARY: Old fields for backwards compatibility during migration (optional now)
+    // TODO: Remove these after products page is fully updated
+    expiryDate?: string;
+    quantity?: number | null;
+    batchNumber?: string;
+}
+
+export interface ProductBatch {
+    id: string;
+    productId: string;
+    batchNumber?: string;
+    expiryDate: string;
+    quantity: number | null;
+    addedDate: string;
+    createdAt: string;
+    updatedAt: string;
 }
 
 export interface Settings {
@@ -54,13 +68,20 @@ export interface AdminUserProduct {
     id: string;
     name: string;
     category: string;
-    expiry_date: string;
-    quantity: number;
-    batch_number?: string;
     supplier?: string;
     location?: string;
     notes?: string;
     barcode?: string;
+    added_date: string;
+    batches?: ProductBatch[];
+}
+
+export interface AdminUserProductBatch {
+    id: string;
+    product_id: string;
+    batch_number?: string;
+    expiry_date: string;
+    quantity: number | null;
     added_date: string;
     status: ExpiryStatus;
 }

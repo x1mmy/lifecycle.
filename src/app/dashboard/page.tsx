@@ -1,50 +1,38 @@
 'use client';
 
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Package, AlertTriangle, XCircle, Loader2, Plus, ArrowRight, TrendingUp, Calendar, BarChart3 } from 'lucide-react';
+import { Package, AlertTriangle, XCircle, Loader2, Plus, ArrowRight, TrendingUp, Calendar } from 'lucide-react';
 import { useSupabaseAuth } from '~/hooks/useSupabaseAuth';
-import { supabase } from '~/lib/supabase';
 import type { Product } from '~/types';
-import { getDaysUntilExpiry, sortByExpiry, formatDate } from '~/utils/dateUtils';
+import { getDaysUntilExpiry } from '~/utils/dateUtils';
+import { getEarliestBatch, hasExpiredBatches, hasExpiringBatches } from '~/utils/batchHelpers';
 import { Header } from '~/components/layout/Header';
 import { StatCard } from '~/components/dashboard/StatCard';
 import { ProductAlert } from '~/components/dashboard/ProductAlert';
 import { useToast } from '~/hooks/use-toast';
+import { api } from '~/trpc/react';
 
-// Database row type (snake_case from Supabase)
-interface ProductRow {
-  id: string;
-  user_id: string;
-  name: string;
+interface CategoryStat {
   category: string;
-  expiry_date: string;
-  quantity: number;
-  batch_number?: string;
-  supplier?: string;
-  location?: string;
-  notes?: string;
-  barcode?: string;
-  added_date: string;
+  total: number;
+  expired: number;
+  expiring: number;
 }
 
-// Transform database row to Product interface (camelCase)
-const transformProductFromDb = (row: ProductRow): Product => ({
-  id: row.id,
-  name: row.name,
-  category: row.category,
-  expiryDate: row.expiry_date,
-  quantity: row.quantity,
-  batchNumber: row.batch_number,
-  supplier: row.supplier,
-  location: row.location,
-  notes: row.notes,
-  addedDate: row.added_date,
-});
+interface UpcomingExpiration {
+  productId: string;
+  productName: string;
+  batchId: string;
+  batchNumber?: string;
+  expiryDate: string;
+  daysUntil: number;
+  quantity: number | null;
+}
 
 /**
  * Dashboard Page - Protected Route for Regular Users
- * 
+ *
  * This page is protected by:
  * 1. Middleware (redirects unauthenticated users)
  * 2. Component-level auth check (double protection)
@@ -53,40 +41,28 @@ export default function DashboardPage() {
   const { user, loading, isAuthenticated } = useSupabaseAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const [products, setProducts] = useState<Product[]>([]);
-  const [productsLoading, setProductsLoading] = useState(false);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
-  /**
-   * Load products for the current user from Supabase
-   * Uses RLS policies to ensure users only see their own products
-   */
-  const loadUserProducts = useCallback(async () => {
-    if (!user) return;
-    
-    setProductsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('expiry_date', { ascending: true });
+  // Fetch products with batches using tRPC
+  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts } = api.products.getAll.useQuery(
+    { userId: user?.id ?? '' },
+    { enabled: !!user?.id }
+  );
 
-      if (error) {
-        console.error('Error loading products:', error);
-        return;
-      }
-
-      // Transform database rows to Product interface
-      const transformedProducts = (data as ProductRow[]).map(transformProductFromDb);
-      setProducts(transformedProducts);
-    } catch (error) {
-      console.error('Unexpected error loading products:', error);
-    } finally {
-      setProductsLoading(false);
-    }
-  }, [user]);
+  // Delete product mutation
+  const deleteProduct = api.products.delete.useMutation({
+    onSuccess: () => {
+      void refetchProducts();
+    },
+    onError: (error) => {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete product',
+        variant: 'destructive',
+      });
+    },
+  });
 
   // Double-check authentication (middleware should handle this, but good to be safe)
   useEffect(() => {
@@ -95,16 +71,9 @@ export default function DashboardPage() {
     }
   }, [isAuthenticated, loading, router]);
 
-  // Load user products from Supabase
-  useEffect(() => {
-    if (user) {
-      void loadUserProducts();
-    }
-  }, [user, loadUserProducts]);
-
   /**
    * Bulk Delete All Expired Products
-   * Deletes all expired products for the current user
+   * Deletes all products that have expired batches
    */
   const handleBulkDeleteExpired = async () => {
     if (!user) return;
@@ -112,26 +81,22 @@ export default function DashboardPage() {
     setIsBulkDeleting(true);
 
     try {
-      const expiredProductIds = expired.map((p) => p.id);
-
-      // Delete all expired products
-      const { error } = await supabase
-        .from('products')
-        .delete()
-        .eq('user_id', user.id)
-        .in('id', expiredProductIds);
-
-      if (error) {
-        throw error;
-      }
+      // Delete all expired products in parallel
+      await Promise.all(
+        expired.map((product) =>
+          deleteProduct.mutateAsync({
+            productId: product.id,
+            userId: user.id,
+          })
+        )
+      );
 
       toast({
         title: 'Success',
-        description: `Deleted ${expiredProductIds.length} expired product${expiredProductIds.length !== 1 ? 's' : ''}`,
+        description: `Deleted ${expired.length} expired product${expired.length !== 1 ? 's' : ''}`,
       });
 
-      // Reload products
-      void loadUserProducts();
+      await refetchProducts();
     } catch (error) {
       console.error('Error deleting expired products:', error);
       toast({
@@ -150,74 +115,110 @@ export default function DashboardPage() {
    * Note: Calculations are placed before early returns to satisfy React Hooks rules
    * All hooks must be called in the same order on every render
    */
-  
+
   // Basic product counts
   const totalProducts = products.length;
-  
-  // Products expiring within 7 days (urgent attention needed)
-  const expiringSoon = products.filter((p) => {
-    const days = getDaysUntilExpiry(p.expiryDate);
-    return days >= 0 && days <= 7;
-  });
-  
-  // Products that have already expired (need immediate action)
-  const expired = products.filter((p) => getDaysUntilExpiry(p.expiryDate) < 0);
+
+  // Products with expiring batches (within 7 days)
+  const expiringSoon = useMemo(() => {
+    return products.filter(product => hasExpiringBatches(product, 7));
+  }, [products]);
+
+  // Products with expired batches
+  const expired = useMemo(() => {
+    return products.filter(product => hasExpiredBatches(product));
+  }, [products]);
 
   /**
    * Category Health Breakdown
    * Groups products by category and tracks their health status
-   * - Shows top 5 categories sorted by urgency (most issues first)
-   * - Tracks expired and expiring counts per category
-   * - Helps identify which product categories need attention
    */
-  const categoryStats = useMemo(() => {
-    const stats: Record<string, { count: number; expiring: number; expired: number }> = {};
-    
-    products.forEach((p) => {
-      const category = p.category || 'Uncategorized';
-      // Initialize category stats if not exists (using nullish coalescing assignment)
-      stats[category] ??= { count: 0, expiring: 0, expired: 0 };
-      stats[category].count++;
-      
-      const days = getDaysUntilExpiry(p.expiryDate);
-      if (days < 0) {
-        stats[category].expired++;
-      } else if (days <= 7) {
-        stats[category].expiring++;
-      }
+  const categoryStats = useMemo((): CategoryStat[] => {
+    const stats = new Map<string, CategoryStat>();
+
+    products.forEach(product => {
+      const existing = stats.get(product.category) ?? {
+        category: product.category,
+        total: 0,
+        expired: 0,
+        expiring: 0,
+      };
+
+      existing.total++;
+      if (hasExpiredBatches(product)) existing.expired++;
+      if (hasExpiringBatches(product, 7)) existing.expiring++;
+
+      stats.set(product.category, existing);
     });
-    
-    // Sort categories by urgency (categories with more issues appear first)
-    // Return only top 5 categories
-    return Object.entries(stats)
-      .sort(([, a], [, b]) => (b.expiring + b.expired) - (a.expiring + a.expired))
+
+    return Array.from(stats.values())
+      .sort((a, b) => (b.expired + b.expiring) - (a.expired + a.expiring))
       .slice(0, 5);
   }, [products]);
 
   /**
    * Upcoming Expirations Timeline
-   * Shows products expiring in the next 30 days
-   * - Displays up to 7 products
-   * - Sorted by expiry date (soonest first)
-   * - Helps users plan ahead and prevent waste
+   * Shows batches expiring in the next 30 days
    */
-  const upcomingExpirations = useMemo(() => {
-    return products
-      .filter((p) => {
-        const days = getDaysUntilExpiry(p.expiryDate);
-        return days >= 0 && days <= 30;
-      })
-      .sort((a, b) => {
-        const daysA = getDaysUntilExpiry(a.expiryDate);
-        const daysB = getDaysUntilExpiry(b.expiryDate);
-        return daysA - daysB;
-      })
-      .slice(0, 7); // Limit to 7 items for compact display
+  const upcomingExpirations = useMemo((): UpcomingExpiration[] => {
+    const today = new Date();
+    const thirtyDaysFromNow = new Date();
+    thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+
+    const expirations: UpcomingExpiration[] = [];
+
+    products.forEach(product => {
+      (product.batches ?? []).forEach(batch => {
+        const expiryDate = new Date(batch.expiryDate);
+        if (expiryDate >= today && expiryDate <= thirtyDaysFromNow) {
+          expirations.push({
+            productId: product.id,
+            productName: product.name,
+            batchId: batch.id,
+            batchNumber: batch.batchNumber,
+            expiryDate: batch.expiryDate,
+            daysUntil: getDaysUntilExpiry(batch.expiryDate),
+            quantity: batch.quantity,
+          });
+        }
+      });
+    });
+
+    return expirations
+      .sort((a, b) => a.daysUntil - b.daysUntil)
+      .slice(0, 7);
   }, [products]);
 
   // Sort products for display in alert sections (limit to 5 items each)
-  const sortedExpiringSoon = sortByExpiry(expiringSoon).slice(0, 5);
-  const sortedExpired = sortByExpiry(expired).slice(0, 5);
+  const sortedExpiringSoon = useMemo(() => {
+    return expiringSoon
+      .map(product => {
+        const earliestBatch = getEarliestBatch(product);
+        return { product, earliestBatch };
+      })
+      .sort((a, b) => {
+        if (!a.earliestBatch) return 1;
+        if (!b.earliestBatch) return -1;
+        return new Date(a.earliestBatch.expiryDate).getTime() - new Date(b.earliestBatch.expiryDate).getTime();
+      })
+      .map(item => item.product)
+      .slice(0, 5);
+  }, [expiringSoon]);
+
+  const sortedExpired = useMemo(() => {
+    return expired
+      .map(product => {
+        const earliestBatch = getEarliestBatch(product);
+        return { product, earliestBatch };
+      })
+      .sort((a, b) => {
+        if (!a.earliestBatch) return 1;
+        if (!b.earliestBatch) return -1;
+        return new Date(a.earliestBatch.expiryDate).getTime() - new Date(b.earliestBatch.expiryDate).getTime();
+      })
+      .map(item => item.product)
+      .slice(0, 5);
+  }, [expired]);
 
   // Show loading spinner while checking authentication status
   if (loading || productsLoading) {
@@ -347,7 +348,7 @@ export default function DashboardPage() {
                     product={product}
                     type="expiring"
                     userId={user?.id ?? ''}
-                    onProductDeleted={loadUserProducts}
+                    onProductDeleted={() => void refetchProducts()}
                   />
                 ))}
                     </div>
@@ -413,7 +414,7 @@ export default function DashboardPage() {
                     product={product}
                     type="expired"
                     userId={user?.id ?? ''}
-                    onProductDeleted={loadUserProducts}
+                    onProductDeleted={() => void refetchProducts()}
                   />
                 ))}
                     </div>
@@ -452,26 +453,38 @@ export default function DashboardPage() {
               <p className="text-sm text-gray-500 mb-4">
                 Upcoming expirations
               </p>
-              
+
               {upcomingExpirations.length > 0 ? (
                 <div className="space-y-3">
-                  {upcomingExpirations.map((product) => {
-                    const days = getDaysUntilExpiry(product.expiryDate);
-                    return (
-                      <div key={product.id} className="flex items-start gap-3 p-3 rounded-lg bg-gray-50 border border-gray-100">
-                        <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-[#059669]/20 flex flex-col items-center justify-center">
-                          <span className="text-xs font-bold text-[#10B981]">{days}</span>
-                          <span className="text-[10px] text-[#10B981]">days</span>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-gray-900 text-sm">{product.name}</p>
-                          <p className="text-xs text-gray-500">{formatDate(product.expiryDate)}</p>
-                        </div>
+                  {upcomingExpirations.map((expiration) => (
+                    <div
+                      key={`${expiration.productId}-${expiration.batchId}`}
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-100"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-gray-900 truncate">
+                          {expiration.productName}
+                        </p>
+                        {expiration.batchNumber && (
+                          <p className="text-xs text-gray-500">
+                            Batch: {expiration.batchNumber}
+                          </p>
+                        )}
                       </div>
-                    );
-                  })}
-              </div>
-            ) : (
+                      <div className="text-right ml-4">
+                        <p className="text-sm font-medium text-gray-900">
+                          {expiration.daysUntil} {expiration.daysUntil === 1 ? 'day' : 'days'}
+                        </p>
+                        {expiration.quantity !== null && (
+                          <p className="text-xs text-gray-500">
+                            Qty: {expiration.quantity}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
                 <div className="text-center py-8 text-gray-400">
                   <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-3">
                     <Calendar className="h-6 w-6 text-gray-400" />
@@ -485,60 +498,42 @@ export default function DashboardPage() {
             {categoryStats.length > 0 && (
               <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <BarChart3 className="h-5 w-5 text-[#10B981]" />
+                  <Package className="h-5 w-5 text-[#10B981]" />
                   <h2 className="text-lg font-semibold text-gray-900">
-                    Category Health
+                    Categories
                   </h2>
                 </div>
                 <p className="text-sm text-gray-500 mb-4">
-                  Products by category
+                  Top categories by urgency
                 </p>
-                
                 <div className="space-y-3">
-                  {categoryStats.map(([category, stats]) => {
-                    const hasIssues = stats.expired > 0 || stats.expiring > 0;
-                    return (
-                      <div key={category} className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-900">{category}</span>
-                          <span className="text-sm text-gray-500">{stats.count}</span>
-                        </div>
-                        <div className="flex gap-1">
-                          {stats.expired > 0 && (
-                            <div className="flex-1 h-2 bg-red-200 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-red-500"
-                                style={{ width: `${(stats.expired / stats.count) * 100}%` }}
-                              />
-                            </div>
-                          )}
-                          {stats.expiring > 0 && (
-                            <div className="flex-1 h-2 bg-amber-200 rounded-full overflow-hidden">
-                              <div 
-                                className="h-full bg-amber-500"
-                                style={{ width: `${(stats.expiring / stats.count) * 100}%` }}
-                              />
-                            </div>
-                          )}
-                          {!hasIssues && (
-                            <div className="flex-1 h-2 bg-green-200 rounded-full">
-                              <div className="h-full bg-green-500 rounded-full" style={{ width: '100%' }} />
-                            </div>
-                          )}
-                        </div>
-                        {hasIssues && (
-                          <div className="flex gap-3 text-xs">
-                            {stats.expired > 0 && (
-                              <span className="text-red-600">{stats.expired} expired</span>
-                            )}
-                            {stats.expiring > 0 && (
-                              <span className="text-amber-600">{stats.expiring} expiring</span>
-                            )}
-                          </div>
+                  {categoryStats.map((stat) => (
+                    <div
+                      key={stat.category}
+                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                    >
+                      <div className="flex-1">
+                        <p className="text-sm font-medium text-gray-900">
+                          {stat.category}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {stat.total} total
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        {stat.expired > 0 && (
+                          <span className="px-2 py-1 bg-red-100 text-red-700 text-xs font-medium rounded">
+                            {stat.expired} expired
+                          </span>
+                        )}
+                        {stat.expiring > 0 && (
+                          <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs font-medium rounded">
+                            {stat.expiring} expiring
+                          </span>
                         )}
                       </div>
-                    );
-                  })}
+                    </div>
+                  ))}
                 </div>
               </div>
             )}

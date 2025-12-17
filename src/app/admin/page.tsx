@@ -310,33 +310,59 @@ export default function AdminDashboardPage() {
                   ) : !userProducts || userProducts.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">No products found</p>
                   ) : (
-                    <div className="border rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Product Name</TableHead>
-                            <TableHead>Category</TableHead>
-                            <TableHead>Expiry Date</TableHead>
-                            <TableHead>Quantity</TableHead>
-                            <TableHead>Status</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {userProducts.map((product) => (
-                            <TableRow key={product.id}>
-                              <TableCell className="font-medium">{product.name}</TableCell>
-                              <TableCell>{product.category}</TableCell>
-                              <TableCell>{formatDate(product.expiry_date)}</TableCell>
-                              <TableCell>{product.quantity}</TableCell>
-                              <TableCell>
-                                <Badge variant={getExpiryBadgeVariant(product.status)}>
-                                  {product.status}
-                                </Badge>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
+                    <div className="space-y-4">
+                      {userProducts.map((product) => (
+                        <div key={product.id} className="border rounded-lg p-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <div>
+                              <h4 className="font-semibold text-lg">{product.name}</h4>
+                              <p className="text-sm text-muted-foreground">{product.category}</p>
+                            </div>
+                            <Badge variant="outline">
+                              {product.batches?.length ?? 0} batch{(product.batches?.length ?? 0) !== 1 ? 'es' : ''}
+                            </Badge>
+                          </div>
+
+                          {product.batches && product.batches.length > 0 ? (
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Batch Number</TableHead>
+                                  <TableHead>Expiry Date</TableHead>
+                                  <TableHead>Quantity</TableHead>
+                                  <TableHead>Status</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {product.batches.map((batch) => {
+                                  const daysUntilExpiry = Math.ceil(
+                                    (new Date(batch.expiryDate).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24)
+                                  );
+                                  let status = 'ok';
+                                  if (daysUntilExpiry <= 0) status = 'expired';
+                                  else if (daysUntilExpiry <= 3) status = 'urgent';
+                                  else if (daysUntilExpiry <= 7) status = 'warning';
+
+                                  return (
+                                    <TableRow key={batch.id}>
+                                      <TableCell>{batch.batchNumber ?? '-'}</TableCell>
+                                      <TableCell>{formatDate(batch.expiryDate)}</TableCell>
+                                      <TableCell>{batch.quantity ?? '-'}</TableCell>
+                                      <TableCell>
+                                        <Badge variant={getExpiryBadgeVariant(status)}>
+                                          {status}
+                                        </Badge>
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
+                              </TableBody>
+                            </Table>
+                          ) : (
+                            <p className="text-sm text-muted-foreground">No batches for this product</p>
+                          )}
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>

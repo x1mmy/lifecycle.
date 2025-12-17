@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useDrag } from '@use-gesture/react';
 import type { Product } from '~/types';
 import { formatDate, getDaysUntilExpiry } from '~/utils/dateUtils';
+import { getEarliestExpiryDate } from '~/utils/batchHelpers';
 import { AlertTriangle, XCircle, Trash2, RefreshCw, Pencil } from 'lucide-react';
 import { useToast } from '~/hooks/use-toast';
 import { api } from '~/trpc/react';
@@ -57,7 +58,8 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
     };
   }, [swipeOffset, isMobile]);
 
-  const daysUntil = getDaysUntilExpiry(product.expiryDate);
+  const earliestExpiryDate = getEarliestExpiryDate(product);
+  const daysUntil = earliestExpiryDate ? getDaysUntilExpiry(earliestExpiryDate) : 0;
 
   const isExpired = type === 'expired';
   const Icon = isExpired ? XCircle : AlertTriangle;
@@ -167,12 +169,15 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
               {isExpired
                 ? `Expired ${Math.abs(daysUntil)} day${Math.abs(daysUntil) !== 1 ? 's' : ''} ago`
                 : `Expires in ${daysUntil} day${daysUntil !== 1 ? 's' : ''}`}
-              {' '}
-              ({formatDate(product.expiryDate)})
+              {earliestExpiryDate && (
+                <>
+                  {' '}
+                  ({formatDate(earliestExpiryDate)})
+                </>
+              )}
             </p>
             <p className="text-xs text-gray-500 mt-1">
-              {product.category} • Qty: {product.quantity ?? 'N/A'}
-              {product.batchNumber && ` • Batch: ${product.batchNumber}`}
+              {product.category} • Batches: {(product.batches ?? []).length}
             </p>
           </div>
 

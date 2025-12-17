@@ -61,15 +61,14 @@ export const QuantityUpdateModal = ({
     }
 
     // Update product with new quantity
+    // NOTE: This needs batch architecture update - quantity is per batch now
     updateProduct.mutate({
       productId: product.id,
       userId,
       product: {
         name: product.name,
         category: product.category,
-        expiryDate: product.expiryDate,
-        quantity: numValue,
-        batchNumber: product.batchNumber,
+        // expiryDate, quantity, batchNumber are batch-specific now
         supplier: product.supplier,
         location: product.location,
         notes: product.notes,
