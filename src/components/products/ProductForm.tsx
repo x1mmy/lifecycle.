@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { X, Barcode, Camera } from "lucide-react";
-import type { Product } from "~/types";
+import { X, Barcode, Camera, Plus, Trash2 } from "lucide-react";
+import type { Product, ProductBatch } from "~/types";
 import { validateRequired, validatePositiveNumber } from "~/utils/validation";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -16,6 +16,7 @@ import {
 import { useToast } from "~/hooks/use-toast";
 import { api } from "~/trpc/react";
 import { BarcodeScanner } from "./BarcodeScanner";
+import { formatDate } from "~/utils/dateUtils";
 
 interface ProductFormProps {
   product?: Product;
@@ -24,16 +25,21 @@ interface ProductFormProps {
   onClose: () => void;
 }
 
-// Form data type
+// Form data type (product details only)
 interface ProductFormData {
   name: string;
   category: string;
-  expiryDate: string;
-  quantity: string | number;
-  batchNumber: string;
   supplier: string;
   location: string;
   notes: string;
+}
+
+// Batch form data (for the batch table)
+interface BatchFormData {
+  tempId: string; // Temporary ID for UI tracking
+  expiryDate: string;
+  quantity: string | number;
+  batchNumber: string;
 }
 
 // Storage key for form draft (isolated per browser tab via sessionStorage)
@@ -48,59 +54,94 @@ export const ProductForm = ({
   const { toast } = useToast();
 
   /**
-   * Initialize form data with smart priority:
-   * 1. If editing existing product → Use product data
-   * 2. If adding new product → Try to restore draft from sessionStorage
-   * 3. If no draft exists → Use empty form
+   * Initialize product form data
    */
   const [formData, setFormData] = useState<ProductFormData>(() => {
-    // Priority 1: If editing existing product, use product data
     if (product) {
       return {
         name: product.name ?? "",
         category: product.category ?? "",
-        expiryDate: product.expiryDate ?? "",
-        quantity: product.quantity ?? "",
-        batchNumber: product.batchNumber ?? "",
         supplier: product.supplier ?? "",
         location: product.location ?? "",
         notes: product.notes ?? "",
       };
     }
 
-    // Priority 2: Try to restore draft from sessionStorage (only when adding new)
-    if (typeof window !== "undefined") {
-      const draft = sessionStorage.getItem(FORM_DRAFT_KEY);
-      if (draft) {
-        try {
-          const parsed = JSON.parse(draft) as ProductFormData;
-          console.log("📝 Restored form draft from sessionStorage:", parsed);
-          return parsed;
-        } catch (error) {
-          console.error("Failed to parse form draft:", error);
-          // If parsing fails, clear the corrupted data
-          sessionStorage.removeItem(FORM_DRAFT_KEY);
-        }
-      }
-    }
-
-    // Priority 3: Default empty form
     return {
       name: "",
       category: "",
-      expiryDate: "",
-      quantity: "",
-      batchNumber: "",
       supplier: "",
       location: "",
       notes: "",
     };
   });
 
+  /**
+   * Initialize batches state
+   * If editing: load existing batches
+   * If adding new: start with one empty batch
+   */
+  const [batches, setBatches] = useState<BatchFormData[]>(() => {
+    if (product?.batches && product.batches.length > 0) {
+      return product.batches.map((batch) => ({
+        tempId: batch.id,
+        expiryDate: batch.expiryDate,
+        quantity: batch.quantity ?? "",
+        batchNumber: batch.batchNumber ?? "",
+      }));
+    }
+
+    // Start with one empty batch for new products
+    return [
+      {
+        tempId: `temp-${Date.now()}`,
+        expiryDate: "",
+        quantity: "",
+        batchNumber: "",
+      },
+    ];
+  });
+
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [batchErrors, setBatchErrors] = useState<Record<string, string>>({});
   const [barcode, setBarcode] = useState<string>("");
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+
+  // Batch management functions
+  const addBatch = () => {
+    setBatches([
+      ...batches,
+      {
+        tempId: `temp-${Date.now()}`,
+        expiryDate: "",
+        quantity: "",
+        batchNumber: "",
+      },
+    ]);
+  };
+
+  const removeBatch = (tempId: string) => {
+    if (batches.length === 1) {
+      toast({
+        title: "Cannot remove",
+        description: "At least one batch is required",
+        variant: "destructive",
+      });
+      return;
+    }
+    setBatches(batches.filter((batch) => batch.tempId !== tempId));
+  };
+
+  const updateBatch = (tempId: string, field: keyof Omit<BatchFormData, 'tempId'>, value: string | number) => {
+    setBatches(
+      batches.map((batch) =>
+        batch.tempId === tempId ? { ...batch, [field]: value } : batch
+      )
+    );
+    // Clear error for this batch field
+    setBatchErrors({ ...batchErrors, [`${tempId}-${field}`]: "" });
+  };
 
   // Initialize barcode from product when editing
   useEffect(() => {
@@ -111,24 +152,19 @@ export const ProductForm = ({
 
   /**
    * Auto-save form draft to sessionStorage
-   * - Only saves when adding NEW product (not editing)
-   * - Only saves if form has actual data
-   * - Triggers on every form field change
+   * Saves both product data and batches
    */
   useEffect(() => {
-    // Don't save draft when editing existing product
-    if (product) return;
+    if (product) return; // Don't save draft when editing
 
-    // Only save if there's actual data in the form
-    const hasData = Object.values(formData).some(
-      (value) => value !== "" && value !== null && value !== undefined
-    );
-
+    const hasData = Object.values(formData).some((value) => value !== "");
     if (hasData && typeof window !== "undefined") {
-      sessionStorage.setItem(FORM_DRAFT_KEY, JSON.stringify(formData));
-      console.log("💾 Auto-saved form draft to sessionStorage");
+      sessionStorage.setItem(
+        FORM_DRAFT_KEY,
+        JSON.stringify({ product: formData, batches })
+      );
     }
-  }, [formData, product]);
+  }, [formData, batches, product]);
 
   // Use tRPC mutation for barcode lookup (server-side API call)
   const barcodeLookup = api.products.lookupBarcode.useMutation();
@@ -278,8 +314,9 @@ export const ProductForm = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
+    // Validation - Product details
     const newErrors: Record<string, string> = {};
+    const newBatchErrors: Record<string, string> = {};
 
     if (!validateRequired(formData.name)) {
       newErrors.name = "Product name is required";
@@ -291,58 +328,67 @@ export const ProductForm = ({
       newErrors.category = "Category is required";
     }
 
-    if (!formData.expiryDate) {
-      newErrors.expiryDate = "Expiry date is required";
+    // Validate batches - at least one batch with expiry date is required
+    let hasValidBatch = false;
+    batches.forEach((batch, index) => {
+      if (!batch.expiryDate) {
+        newBatchErrors[`${batch.tempId}-expiryDate`] = "Expiry date is required";
+      } else {
+        hasValidBatch = true;
+      }
+
+      // Validate quantity if provided
+      if (batch.quantity && batch.quantity !== "") {
+        const qty = typeof batch.quantity === "string" ? parseInt(batch.quantity, 10) : batch.quantity;
+        if (isNaN(qty) || qty <= 0) {
+          newBatchErrors[`${batch.tempId}-quantity`] = "Quantity must be a positive number";
+        }
+      }
+    });
+
+    if (!hasValidBatch) {
+      toast({
+        title: "Validation Error",
+        description: "At least one batch with an expiry date is required",
+        variant: "destructive",
+      });
     }
 
-    // Validate quantity (optional field)
-    if (formData.quantity && formData.quantity !== "" && (typeof formData.quantity === "string" || !validatePositiveNumber(formData.quantity))) {
-      newErrors.quantity = "Quantity must be a positive number";
-    }
-
-    if (Object.keys(newErrors).length > 0) {
+    if (Object.keys(newErrors).length > 0 || Object.keys(newBatchErrors).length > 0) {
       setErrors(newErrors);
+      setBatchErrors(newBatchErrors);
       return;
     }
 
-    // Convert quantity to number for submission (allow null if empty)
-    let quantityValue: number | null = null;
-    if (formData.quantity && formData.quantity !== "") {
-      if (typeof formData.quantity === "string") {
-        quantityValue = parseInt(formData.quantity, 10);
-        if (isNaN(quantityValue)) {
-          throw new Error("Quantity must be a valid number");
-        }
-      } else {
-        quantityValue = formData.quantity;
-      }
+    // Prepare product data with first batch (for backwards compatibility with current API)
+    const firstBatch = batches[0];
+    if (!firstBatch) {
+      toast({
+        title: "Error",
+        description: "At least one batch is required",
+        variant: "destructive",
+      });
+      return;
     }
-
-    //DEBUGGING CODE
-    //console.log("🔍 [Frontend Debug] Barcode state before submit:", barcode);
-    //console.log("🔍 [Frontend Debug] Barcode trimmed:", barcode.trim());
-
 
     const submitData: Omit<Product, "id" | "addedDate"> = {
       name: formData.name,
       category: formData.category,
-      expiryDate: formData.expiryDate,
-      quantity: quantityValue,
-      batchNumber: formData.batchNumber || undefined,
+      expiryDate: firstBatch.expiryDate,
+      quantity: firstBatch.quantity ? (typeof firstBatch.quantity === "string" ? parseInt(firstBatch.quantity, 10) : firstBatch.quantity) : null,
+      batchNumber: firstBatch.batchNumber || undefined,
       supplier: formData.supplier || undefined,
       location: formData.location || undefined,
       notes: formData.notes || undefined,
-      barcode: barcode.trim() ? barcode.trim() : undefined, // Include barcode if present
+      barcode: barcode.trim() ? barcode.trim() : undefined,
     };
 
     // Submit the form
     onSubmit(submitData);
 
     // Clear draft from sessionStorage after successful submission
-    // (only for new products, not when editing)
     if (!product && typeof window !== "undefined") {
       sessionStorage.removeItem(FORM_DRAFT_KEY);
-      console.log("🗑️ Cleared form draft from sessionStorage");
     }
   };
 
@@ -361,7 +407,7 @@ export const ProductForm = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-card max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl shadow-xl">
+      <div className="bg-card max-h-[90vh] w-full max-w-6xl overflow-y-auto rounded-xl shadow-xl">
         {/* Header */}
         <div className="border-border bg-card sticky top-0 z-10 flex items-center justify-between border-b p-6">
           <h2 className="text-foreground text-xl font-semibold">
@@ -377,9 +423,9 @@ export const ProductForm = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4 p-6">
-          {/* Barcode Scanner Section */}
-          <div className="bg-muted border-border rounded-lg border-2 border-dashed p-4">
+        <form onSubmit={handleSubmit} className="p-6">
+          {/* Barcode Scanner Section - Full Width */}
+          <div className="bg-muted border-border rounded-lg border-2 border-dashed p-4 mb-6">
             <div className="mb-2 flex items-center gap-2">
               <Barcode className="text-muted-foreground h-5 w-5" />
               <Label htmlFor="barcode" className="text-base font-semibold">
@@ -426,20 +472,25 @@ export const ProductForm = ({
             onScan={handleBarcodeScanned}
           />
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="md:col-span-2">
-              <Label htmlFor="name">Product Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) => handleChange("name", e.target.value)}
-                className={errors.name ? "border-destructive" : ""}
-                placeholder="e.g., Milk 2L"
-              />
-              {errors.name && (
-                <p className="text-destructive mt-1 text-sm">{errors.name}</p>
-              )}
-            </div>
+          {/* Two Column Layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* LEFT COLUMN - Product Details */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-gray-900 mb-4">Product Details</h3>
+
+              <div>
+                <Label htmlFor="name">Product Name *</Label>
+                <Input
+                  id="name"
+                  value={formData.name}
+                  onChange={(e) => handleChange("name", e.target.value)}
+                  className={errors.name ? "border-destructive" : ""}
+                  placeholder="e.g., Milk 2L"
+                />
+                {errors.name && (
+                  <p className="text-destructive mt-1 text-sm">{errors.name}</p>
+                )}
+              </div>
 
             <div>
               <Label htmlFor="category">Category *</Label>
@@ -523,95 +574,154 @@ export const ProductForm = ({
               )}
             </div>
 
-            <div>
-              <Label htmlFor="expiryDate">Expiry Date *</Label>
-              <Input
-                id="expiryDate"
-                type="date"
-                value={formData.expiryDate}
-                onChange={(e) => handleChange("expiryDate", e.target.value)}
-                className={errors.expiryDate ? "border-destructive" : ""}
-              />
-              {errors.expiryDate && (
-                <p className="text-destructive mt-1 text-sm">
-                  {errors.expiryDate}
-                </p>
-              )}
+              <div>
+                <Label htmlFor="supplier">Supplier</Label>
+                <Input
+                  id="supplier"
+                  value={formData.supplier}
+                  onChange={(e) => handleChange("supplier", e.target.value)}
+                  placeholder="e.g., Fresh Foods Co."
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="location">Storage Location</Label>
+                <Input
+                  id="location"
+                  value={formData.location}
+                  onChange={(e) => handleChange("location", e.target.value)}
+                  placeholder="e.g., Aisle 3, Shelf 2"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={(e) => handleChange("notes", e.target.value)}
+                  placeholder="Additional information..."
+                  rows={3}
+                />
+              </div>
             </div>
 
-            <div>
-              <Label htmlFor="quantity">Quantity</Label>
-              <Input
-                id="quantity"
-                type="number"
-                min="1"
-                value={formData.quantity}
-                onChange={(e) => {
-                  const inputValue = e.target.value;
-                  // Allow empty string for better UX when user is typing
-                  if (inputValue === "") {
-                    handleChange("quantity", "");
-                  } else {
-                    // Parse as integer, but don't default to 0 for empty strings
-                    const numValue = parseInt(inputValue, 10);
-                    if (!isNaN(numValue) && numValue > 0) {
-                      handleChange("quantity", numValue);
-                    }
-                  }
-                }}
-                className={errors.quantity ? "border-destructive" : ""}
-              />
-              {errors.quantity && (
-                <p className="text-destructive mt-1 text-sm">
-                  {errors.quantity}
-                </p>
-              )}
-            </div>
+            {/* RIGHT COLUMN - Batch Management */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Batches</h3>
+                <Button
+                  type="button"
+                  onClick={addBatch}
+                  variant="outline"
+                  size="sm"
+                  className="flex items-center gap-1"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add Batch
+                </Button>
+              </div>
 
-            <div>
-              <Label htmlFor="batchNumber">Batch Number</Label>
-              <Input
-                id="batchNumber"
-                value={formData.batchNumber}
-                onChange={(e) => handleChange("batchNumber", e.target.value)}
-                placeholder="e.g., B12345"
-              />
-            </div>
+              <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2">
+                {batches.map((batch, index) => (
+                  <div
+                    key={batch.tempId}
+                    className="border border-gray-200 rounded-lg p-4 bg-gray-50 relative"
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-sm font-medium text-gray-700">
+                        Batch #{index + 1}
+                      </span>
+                      {batches.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => removeBatch(batch.tempId)}
+                          className="text-red-600 hover:text-red-700 p-1"
+                          title="Remove batch"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
 
-            <div>
-              <Label htmlFor="supplier">Supplier</Label>
-              <Input
-                id="supplier"
-                value={formData.supplier}
-                onChange={(e) => handleChange("supplier", e.target.value)}
-                placeholder="e.g., Fresh Foods Co."
-              />
-            </div>
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor={`batch-${batch.tempId}-expiry`}>
+                          Expiry Date *
+                        </Label>
+                        <Input
+                          id={`batch-${batch.tempId}-expiry`}
+                          type="date"
+                          value={batch.expiryDate}
+                          onChange={(e) =>
+                            updateBatch(batch.tempId, "expiryDate", e.target.value)
+                          }
+                          className={
+                            batchErrors[`${batch.tempId}-expiryDate`]
+                              ? "border-destructive"
+                              : ""
+                          }
+                        />
+                        {batchErrors[`${batch.tempId}-expiryDate`] && (
+                          <p className="text-destructive mt-1 text-xs">
+                            {batchErrors[`${batch.tempId}-expiryDate`]}
+                          </p>
+                        )}
+                      </div>
 
-            <div>
-              <Label htmlFor="location">Storage Location</Label>
-              <Input
-                id="location"
-                value={formData.location}
-                onChange={(e) => handleChange("location", e.target.value)}
-                placeholder="e.g., Aisle 3, Shelf 2"
-              />
-            </div>
+                      <div>
+                        <Label htmlFor={`batch-${batch.tempId}-quantity`}>
+                          Quantity
+                        </Label>
+                        <Input
+                          id={`batch-${batch.tempId}-quantity`}
+                          type="number"
+                          min="1"
+                          value={batch.quantity}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            updateBatch(
+                              batch.tempId,
+                              "quantity",
+                              val === "" ? "" : parseInt(val, 10)
+                            );
+                          }}
+                          placeholder="e.g., 10"
+                          className={
+                            batchErrors[`${batch.tempId}-quantity`]
+                              ? "border-destructive"
+                              : ""
+                          }
+                        />
+                        {batchErrors[`${batch.tempId}-quantity`] && (
+                          <p className="text-destructive mt-1 text-xs">
+                            {batchErrors[`${batch.tempId}-quantity`]}
+                          </p>
+                        )}
+                      </div>
 
-            <div className="md:col-span-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                value={formData.notes}
-                onChange={(e) => handleChange("notes", e.target.value)}
-                placeholder="Additional information..."
-                rows={3}
-              />
+                      <div>
+                        <Label htmlFor={`batch-${batch.tempId}-batchNumber`}>
+                          Batch Number
+                        </Label>
+                        <Input
+                          id={`batch-${batch.tempId}-batchNumber`}
+                          value={batch.batchNumber}
+                          onChange={(e) =>
+                            updateBatch(batch.tempId, "batchNumber", e.target.value)
+                          }
+                          placeholder="e.g., B12345"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3 pt-4">
+          <div className="flex gap-3 pt-6 mt-6 border-t border-gray-200">
             <Button type="submit" className="flex-1">
               {product ? "Update Product" : "Add Product"}
             </Button>
