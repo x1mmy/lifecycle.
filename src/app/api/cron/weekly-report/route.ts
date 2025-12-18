@@ -15,11 +15,15 @@ interface DatabaseProduct {
   id: string;
   name: string;
   category: string;
-  expiry_date: string;
-  quantity: number;
-  batch_number?: string;
   supplier?: string;
-  location?: string;
+}
+
+interface DatabaseBatch {
+  id: string;
+  product_id: string;
+  batch_number?: string;
+  expiry_date: string;
+  quantity: number | null;
 }
 
 interface SupabaseError {
@@ -54,6 +58,7 @@ function calculateDaysUntilExpiry(expiryDate: string): number {
 
 /**
  * Get user's email stats for the month
+ * Updated to work with product_batches architecture
  */
 async function getUserEmailStats(userId: string): Promise<{
   stats: EmailStats;
@@ -61,38 +66,68 @@ async function getUserEmailStats(userId: string): Promise<{
   expiredProducts: Product[];
 }> {
   // Get all products for the user
-  const { data: allProducts, error: allProductsError } = await supabase
+  const { data: userProducts, error: productsError } = await supabase
     .from('products')
-    .select('*')
+    .select('id, name, category, supplier')
     .eq('user_id', userId) as { data: DatabaseProduct[] | null; error: SupabaseError | null };
 
-  if (allProductsError) {
-    throw new Error(`Failed to fetch products: ${allProductsError.message}`);
+  if (productsError) {
+    throw new Error(`Failed to fetch products: ${productsError.message}`);
   }
 
-  const products = allProducts ?? [];
+  const products = userProducts ?? [];
 
-  // Categorize products
+  if (products.length === 0) {
+    // No products, return empty stats
+    return {
+      stats: {
+        totalProducts: 0,
+        expiredCount: 0,
+        expiringSoonCount: 0,
+        topCategories: [],
+      },
+      expiringProducts: [],
+      expiredProducts: [],
+    };
+  }
+
+  // Get all batches for user's products
+  const productIds = products.map(p => p.id);
+  const { data: allBatches, error: batchesError } = await supabase
+    .from('product_batches')
+    .select('*')
+    .in('product_id', productIds) as { data: DatabaseBatch[] | null; error: SupabaseError | null };
+
+  if (batchesError) {
+    throw new Error(`Failed to fetch batches: ${batchesError.message}`);
+  }
+
+  const batches = allBatches ?? [];
+
+  // Categorize batches
   const expiredProducts: Product[] = [];
   const expiringProducts: Product[] = [];
   const categoryCounts: Record<string, number> = {};
 
-  products.forEach(product => {
-    const daysUntilExpiry = calculateDaysUntilExpiry(product.expiry_date);
-    
-    // Count categories
-    categoryCounts[product.category] = (categoryCounts[product.category] ?? 0) + 1;
+  batches.forEach(batch => {
+    const product = products.find(p => p.id === batch.product_id);
+    if (!product) return;
 
-    // Transform to Product type
+    const daysUntilExpiry = calculateDaysUntilExpiry(batch.expiry_date);
+
+    // Count categories (count by product, not batch)
+    categoryCounts[product.category] ??= 1;
+
+    // Transform to Product type (for email)
     const transformedProduct: Product = {
-      id: product.id,
+      id: batch.id,
       name: product.name,
       category: product.category,
-      expiry_date: product.expiry_date,
-      quantity: product.quantity,
-      batch_number: product.batch_number,
+      expiry_date: batch.expiry_date,
+      quantity: batch.quantity ?? 0,
+      batch_number: batch.batch_number,
       supplier: product.supplier,
-      location: product.location,
+      location: undefined,
       days_until_expiry: daysUntilExpiry,
     };
 
@@ -104,7 +139,7 @@ async function getUserEmailStats(userId: string): Promise<{
   });
 
   // Sort expired products by most recent first
-  expiredProducts.sort((a, b) => 
+  expiredProducts.sort((a, b) =>
     new Date(b.expiry_date).getTime() - new Date(a.expiry_date).getTime()
   );
 
@@ -118,9 +153,9 @@ async function getUserEmailStats(userId: string): Promise<{
     .slice(0, 5);
 
   const stats: EmailStats = {
-    totalProducts: products.length,
-    expiredCount: expiredProducts.length,
-    expiringSoonCount: expiringProducts.length,
+    totalProducts: products.length, // Count unique products
+    expiredCount: expiredProducts.length, // Count expired batches
+    expiringSoonCount: expiringProducts.length, // Count expiring batches
     topCategories,
   };
 
@@ -133,6 +168,7 @@ async function getUserEmailStats(userId: string): Promise<{
 
 /**
  * Weekly cron job to send summary reports
+ * Updated to work with product_batches architecture
  * Runs every Monday at 10:00 AM UTC
  */
 export async function GET(request: NextRequest) {
@@ -140,16 +176,15 @@ export async function GET(request: NextRequest) {
     // Verify CRON_SECRET for security
     const authHeader = request.headers.get('Authorization');
     const expectedAuth = `Bearer ${process.env.CRON_SECRET}`;
-    
+
     if (!authHeader || authHeader !== expectedAuth) {
       console.error('❌ Unauthorized cron job request');
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    console.log('🚀 Starting weekly report cron job...');
+    console.log('🚀 Starting weekly report cron job (batch architecture)...');
 
     // Get all users who have weekly_report enabled
-    // First get settings, then get profiles separately to avoid foreign key relationship issues
     const { data: settings, error: settingsError } = await supabase
       .from('settings')
       .select('user_id')
@@ -162,7 +197,7 @@ export async function GET(request: NextRequest) {
 
     if (!settings || settings.length === 0) {
       console.log('ℹ️ No users found with weekly reports enabled');
-      return NextResponse.json({ 
+      return NextResponse.json({
         message: 'No users with weekly reports enabled',
         processed: 0,
         emails_sent: 0
@@ -203,7 +238,7 @@ export async function GET(request: NextRequest) {
     for (const userSetting of users) {
       try {
         const profile = userSetting.profiles;
-        
+
         // Skip inactive users
         if (!profile.is_active) {
           console.log(`⏭️ Skipping inactive user: ${profile.email}`);
@@ -212,7 +247,7 @@ export async function GET(request: NextRequest) {
 
         processedUsers++;
 
-        // Get user's email stats
+        // Get user's email stats (now includes batch data)
         const { stats, expiringProducts, expiredProducts } = await getUserEmailStats(profile.id);
 
         // Send email (always send, even if no products)
@@ -259,7 +294,7 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error('❌ Weekly cron job failed:', error);
     return NextResponse.json(
-      { 
+      {
         error: 'Internal server error',
         message: error instanceof Error ? error.message : 'Unknown error'
       },

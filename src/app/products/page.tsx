@@ -27,11 +27,11 @@ import {
 } from "lucide-react";
 import { Checkbox } from "~/components/ui/checkbox";
 import { useSupabaseAuth } from "~/hooks/useSupabaseAuth";
-import { supabase } from "~/lib/supabase";
 import type { Product } from "~/types";
 import { Header } from "~/components/layout/Header";
 import { ProductForm } from "~/components/products/ProductForm";
 import { getDaysUntilExpiry, formatDate } from "~/utils/dateUtils";
+import { getEarliestBatch, getEarliestExpiryDate, getTotalQuantity } from "~/utils/batchHelpers";
 import { useToast } from "~/hooks/use-toast";
 import { api } from "~/trpc/react";
 
@@ -64,13 +64,15 @@ const transformProductFromDb = (row: ProductRow): Product => ({
   id: row.id,
   name: row.name,
   category: row.category,
-  expiryDate: row.expiry_date,
-  quantity: row.quantity,
-  batchNumber: row.batch_number ?? undefined,
   supplier: row.supplier ?? undefined,
   location: row.location ?? undefined,
   notes: row.notes ?? undefined,
   addedDate: row.added_date,
+  batches: [], // TODO: Products page needs batch architecture update
+  // TEMPORARY: These columns don't exist anymore after migration - page will not work
+  expiryDate: row.expiry_date ?? '2099-12-31',  // Fake date
+  quantity: row.quantity ?? 0,
+  batchNumber: row.batch_number ?? undefined,
 });
 
 // Type definitions for product filtering, sorting, and pagination
@@ -84,10 +86,14 @@ function ProductsPageContent() {
   const searchParams = useSearchParams();
   const { toast } = useToast();
 
-  // Core product data and UI state
-  const [products, setProducts] = useState<Product[]>([]);
+  // Fetch products with batches using tRPC
+  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts } = api.products.getAll.useQuery(
+    { userId: user?.id ?? '' },
+    { enabled: !!user?.id }
+  );
+
+  // UI state
   const [searchTerm, setSearchTerm] = useState("");
-  const [productsLoading, setProductsLoading] = useState(false);
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | undefined>(
     undefined,
@@ -241,55 +247,13 @@ function ProductsPageContent() {
   /**
    * tRPC Mutations for CRUD Operations
    * All data modifications go through backend API for validation and business logic
-   * After mutations, we call loadUserProducts() to refresh the data
+   * After mutations, we call refetchProducts() to refresh the data
    */
   const utils = api.useUtils(); // Get tRPC utils for cache invalidation
   const createProductMutation = api.products.create.useMutation();
   const updateProductMutation = api.products.update.useMutation();
   const deleteProductMutation = api.products.delete.useMutation();
 
-  /**
-   * Load products for the current user from Supabase
-   * Direct client-side fetch for fast data retrieval
-   * Uses RLS policies to ensure users only see their own products
-   */
-  const loadUserProducts = useCallback(async () => {
-    if (!user) return;
-
-    setProductsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("products")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("expiry_date", { ascending: true });
-
-      if (error) {
-        console.error("Error loading products:", error);
-        toast({
-          title: "Error",
-          description: "Failed to load products",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      // Transform database rows to Product interface
-      const transformedProducts = (data as ProductRow[]).map(
-        transformProductFromDb,
-      );
-      setProducts(transformedProducts);
-    } catch (error) {
-      console.error("Unexpected error loading products:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load products",
-        variant: "destructive",
-      });
-    } finally {
-      setProductsLoading(false);
-    }
-  }, [user, toast]);
 
   // Capture productId from query string whenever it changes
   useEffect(() => {
@@ -321,12 +285,6 @@ function ProductsPageContent() {
     }
   }, [isAuthenticated, loading, router]);
 
-  // Load user products from Supabase
-  useEffect(() => {
-    if (user) {
-      void loadUserProducts();
-    }
-  }, [user, loadUserProducts]);
 
   /**
    * Filter, Sort, and Paginate Products
@@ -335,6 +293,7 @@ function ProductsPageContent() {
    * 2. Applies status filter (all, expired, expiring-soon, good)
    * 3. Sorts by selected field and direction
    *
+   * Updated to work with batch architecture - uses earliest batch for filtering/sorting
    * Memoized for performance - only recalculates when dependencies change
    */
   const filteredAndSortedProducts = useMemo(() => {
@@ -345,31 +304,36 @@ function ProductsPageContent() {
       // Check if search term is a date
       const parsedDate = parseDateFromSearch(searchTerm);
       if (parsedDate) {
-        // If it's a date, filter by expiry date match
+        // If it's a date, filter by any batch expiry date match
         result = result.filter((product) => {
-          const expiryDate = new Date(product.expiryDate);
-          expiryDate.setHours(0, 0, 0, 0);
-          const searchDate = new Date(parsedDate);
-          searchDate.setHours(0, 0, 0, 0);
-          return expiryDate.getTime() === searchDate.getTime();
+          return (product.batches ?? []).some(batch => {
+            const expiryDate = new Date(batch.expiryDate);
+            expiryDate.setHours(0, 0, 0, 0);
+            const searchDate = new Date(parsedDate);
+            searchDate.setHours(0, 0, 0, 0);
+            return expiryDate.getTime() === searchDate.getTime();
+          });
         });
       } else {
-        // Otherwise, search across name, category, and batch number
+        // Otherwise, search across name, category, and batch numbers
         result = result.filter(
           (product) =>
             product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            product.batchNumber
-              ?.toLowerCase()
-              .includes(searchTerm.toLowerCase()),
+            (product.batches ?? []).some(batch =>
+              batch.batchNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+            ),
         );
       }
     }
 
-    // Step 2: Apply status filter based on expiry date
+    // Step 2: Apply status filter based on earliest batch expiry date
     if (activeFilter !== "all") {
       result = result.filter((product) => {
-        const daysUntil = getDaysUntilExpiry(product.expiryDate);
+        const earliestExpiryDate = getEarliestExpiryDate(product);
+        if (!earliestExpiryDate) return false;
+
+        const daysUntil = getDaysUntilExpiry(earliestExpiryDate);
         switch (activeFilter) {
           case "expired":
             return daysUntil < 0; // Past expiry date
@@ -383,10 +347,13 @@ function ProductsPageContent() {
       });
     }
 
-    // Step 3: Apply date range filter
+    // Step 3: Apply date range filter (using earliest batch)
     if (startDate || endDate) {
       result = result.filter((product) => {
-        const expiryDate = new Date(product.expiryDate);
+        const earliestExpiryDate = getEarliestExpiryDate(product);
+        if (!earliestExpiryDate) return false;
+
+        const expiryDate = new Date(earliestExpiryDate);
         expiryDate.setHours(0, 0, 0, 0);
 
         // Filter by start date (products expiring on or after startDate)
@@ -411,7 +378,7 @@ function ProductsPageContent() {
       });
     }
 
-    // Step 4: Apply sorting
+    // Step 4: Apply sorting (using earliest batch for expiry-related sorts)
     result.sort((a, b) => {
       let aVal: string | number;
       let bVal: string | number;
@@ -427,17 +394,25 @@ function ProductsPageContent() {
           bVal = b.category.toLowerCase();
           break;
         case "expiryDate":
-          aVal = new Date(a.expiryDate).getTime();
-          bVal = new Date(b.expiryDate).getTime();
+          {
+            const aExpiry = getEarliestExpiryDate(a);
+            const bExpiry = getEarliestExpiryDate(b);
+            aVal = aExpiry ? new Date(aExpiry).getTime() : Number.MAX_SAFE_INTEGER;
+            bVal = bExpiry ? new Date(bExpiry).getTime() : Number.MAX_SAFE_INTEGER;
+          }
           break;
         case "status":
           // Sort by expiry date priority (products expiring first)
-          aVal = new Date(a.expiryDate).getTime();
-          bVal = new Date(b.expiryDate).getTime();
+          {
+            const aExpiry = getEarliestExpiryDate(a);
+            const bExpiry = getEarliestExpiryDate(b);
+            aVal = aExpiry ? new Date(aExpiry).getTime() : Number.MAX_SAFE_INTEGER;
+            bVal = bExpiry ? new Date(bExpiry).getTime() : Number.MAX_SAFE_INTEGER;
+          }
           break;
         case "quantity":
-          aVal = a.quantity ?? 0;
-          bVal = b.quantity ?? 0;
+          aVal = getTotalQuantity(a);
+          bVal = getTotalQuantity(b);
           break;
         default:
           return 0;
@@ -490,12 +465,15 @@ function ProductsPageContent() {
    * Takes into account the date range filter if active
    */
   const filterCounts = useMemo(() => {
-    // First apply date range filter if active
+    // First apply date range filter if active (using earliest batch)
     let dateFilteredProducts = products;
 
     if (startDate || endDate) {
       dateFilteredProducts = products.filter((product) => {
-        const expiryDate = new Date(product.expiryDate);
+        const earliestExpiryDate = getEarliestExpiryDate(product);
+        if (!earliestExpiryDate) return false;
+
+        const expiryDate = new Date(earliestExpiryDate);
         expiryDate.setHours(0, 0, 0, 0);
 
         // Filter by start date (products expiring on or after startDate)
@@ -520,19 +498,23 @@ function ProductsPageContent() {
       });
     }
 
-    // Then calculate counts from date-filtered products
+    // Then calculate counts from date-filtered products (using earliest batch)
     return {
       all: dateFilteredProducts.length,
-      expired: dateFilteredProducts.filter(
-        (p) => getDaysUntilExpiry(p.expiryDate) < 0,
-      ).length,
+      expired: dateFilteredProducts.filter((p) => {
+        const earliestExpiryDate = getEarliestExpiryDate(p);
+        return earliestExpiryDate ? getDaysUntilExpiry(earliestExpiryDate) < 0 : false;
+      }).length,
       "expiring-soon": dateFilteredProducts.filter((p) => {
-        const days = getDaysUntilExpiry(p.expiryDate);
+        const earliestExpiryDate = getEarliestExpiryDate(p);
+        if (!earliestExpiryDate) return false;
+        const days = getDaysUntilExpiry(earliestExpiryDate);
         return days >= 0 && days <= 7;
       }).length,
-      good: dateFilteredProducts.filter(
-        (p) => getDaysUntilExpiry(p.expiryDate) > 7,
-      ).length,
+      good: dateFilteredProducts.filter((p) => {
+        const earliestExpiryDate = getEarliestExpiryDate(p);
+        return earliestExpiryDate ? getDaysUntilExpiry(earliestExpiryDate) > 7 : false;
+      }).length,
     };
   }, [products, startDate, endDate]);
 
@@ -588,7 +570,7 @@ function ProductsPageContent() {
   /**
    * Submit Product Handler
    * Uses tRPC mutations for server-side validation and business logic
-   * After mutation, refreshes data with loadUserProducts()
+   * After mutation, refreshes data with refetchProducts()
    */
   const handleSubmitProduct = async (
     productData: Omit<Product, "id" | "addedDate">,
@@ -604,9 +586,7 @@ function ProductsPageContent() {
           product: {
             name: productData.name,
             category: productData.category,
-            expiryDate: productData.expiryDate,
-            quantity: productData.quantity,
-            batchNumber: productData.batchNumber,
+            // expiryDate, quantity, batchNumber are batch-specific now
             supplier: productData.supplier,
             location: productData.location,
             notes: productData.notes,
@@ -620,18 +600,25 @@ function ProductsPageContent() {
         });
       } else {
         // Create new product via tRPC
+        // Ensure expiryDate is provided for the first batch
+        if (!productData.expiryDate) {
+          throw new Error("Expiry date is required for the first batch");
+        }
+
         await createProductMutation.mutateAsync({
           userId: user.id,
           product: {
             name: productData.name,
             category: productData.category,
-            expiryDate: productData.expiryDate,
-            quantity: productData.quantity,
-            batchNumber: productData.batchNumber,
             supplier: productData.supplier,
             location: productData.location,
             notes: productData.notes,
             barcode: productData.barcode,
+          },
+          batch: {
+            expiryDate: productData.expiryDate,
+            quantity: productData.quantity,
+            batchNumber: productData.batchNumber,
           },
         });
 
@@ -647,7 +634,7 @@ function ProductsPageContent() {
       await utils.settings.getCategories.invalidate({ userId: user.id });
 
       // Reload products from client-side and close form
-      await loadUserProducts();
+      await refetchProducts();
       handleCloseForm();
     } catch (error) {
       console.error("Error saving product:", error);
@@ -662,7 +649,7 @@ function ProductsPageContent() {
   /**
    * Confirm Delete Handler
    * Uses tRPC mutation for server-side deletion with security checks
-   * After mutation, refreshes data with loadUserProducts()
+   * After mutation, refreshes data with refetchProducts()
    */
   const handleConfirmDelete = async () => {
     if (!user || !productToDelete) return;
@@ -680,7 +667,7 @@ function ProductsPageContent() {
       });
 
       // Reload products from client-side
-      await loadUserProducts();
+      await refetchProducts();
 
       // Close modal
       setDeleteModalOpen(false);
@@ -922,7 +909,7 @@ function ProductsPageContent() {
           title: "Products deleted",
           description: `Successfully deleted ${successCount} product${successCount !== 1 ? "s" : ""}.${failCount > 0 ? ` ${failCount} failed.` : ""}`,
         });
-        await loadUserProducts();
+        await refetchProducts();
         handleClearSelection();
       }
 
@@ -1450,28 +1437,37 @@ function ProductsPageContent() {
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
-                                <span className="text-gray-500">Expires:</span>
+                                <span className="text-gray-500">Batches:</span>
                                 <span className="font-medium text-gray-900">
-                                  {formatDate(product.expiryDate)}
+                                  {(product.batches ?? []).length}
                                 </span>
                               </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-gray-500">Quantity:</span>
-                                <span className="font-medium text-gray-900">
-                                  {product.quantity}
-                                </span>
-                              </div>
-                              {product.batchNumber && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-gray-500">Batch:</span>
-                                  <span className="font-medium text-gray-900">
-                                    {product.batchNumber}
-                                  </span>
-                                </div>
-                              )}
+                              {(() => {
+                                const earliestBatch = getEarliestBatch(product);
+                                if (!earliestBatch) return null;
+                                return (
+                                  <>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-gray-500">Earliest Expiry:</span>
+                                      <span className="font-medium text-gray-900">
+                                        {formatDate(earliestBatch.expiryDate)}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between">
+                                      <span className="text-gray-500">Total Qty:</span>
+                                      <span className="font-medium text-gray-900">
+                                        {getTotalQuantity(product)}
+                                      </span>
+                                    </div>
+                                  </>
+                                );
+                              })()}
                             </div>
                             <div className="mt-2">
-                              {getStatusBadge(product.expiryDate)}
+                              {(() => {
+                                const earliestExpiryDate = getEarliestExpiryDate(product);
+                                return earliestExpiryDate ? getStatusBadge(earliestExpiryDate) : null;
+                              })()}
                             </div>
                           </div>
                         </div>
@@ -1625,16 +1621,22 @@ function ProductsPageContent() {
                           {product.category}
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
-                          {formatDate(product.expiryDate)}
+                          {(() => {
+                            const earliestExpiryDate = getEarliestExpiryDate(product);
+                            return earliestExpiryDate ? formatDate(earliestExpiryDate) : "-";
+                          })()}
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap">
-                          {getStatusBadge(product.expiryDate)}
+                          {(() => {
+                            const earliestExpiryDate = getEarliestExpiryDate(product);
+                            return earliestExpiryDate ? getStatusBadge(earliestExpiryDate) : null;
+                          })()}
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
-                          {product.quantity}
+                          {getTotalQuantity(product)}
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
-                          {product.batchNumber ?? "-"}
+                          {(product.batches ?? []).length} batch{(product.batches ?? []).length !== 1 ? 'es' : ''}
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
                           <div className="flex items-center gap-2">

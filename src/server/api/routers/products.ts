@@ -4,16 +4,16 @@ import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { supabaseAdmin } from "~/lib/supabase-admin";
 
 /**
- * Products Router
+ * Products Router - Batch Architecture
  *
- * Backend API endpoints for product-related operations
- * Handles all CRUD operations and business logic server-side
+ * Backend API endpoints for product and batch-related operations
+ * Architecture: Products have multiple batches (1:many relationship)
  *
  * Architecture Benefits:
- * - Frontend is purely UI/presentation
- * - Business logic centralized in backend
- * - Consistent error handling
- * - Type-safe with Zod validation
+ * - Track multiple expiry dates per product
+ * - Manage inventory by batch
+ * - Historical batch tracking
+ * - Flexible quantity management per batch
  */
 
 /**
@@ -32,17 +32,13 @@ interface BarcodeLookupResponse {
 }
 
 /**
- * Database Product Row Type
- * Matches the Supabase products table schema
+ * Database Row Types
  */
 interface ProductRow {
   id: string;
   user_id: string;
   name: string;
   category: string;
-  expiry_date: string;
-  quantity: number | null;
-  batch_number?: string | null;
   supplier?: string | null;
   location?: string | null;
   notes?: string | null;
@@ -50,13 +46,34 @@ interface ProductRow {
   added_date: string;
 }
 
+interface ProductBatchRow {
+  id: string;
+  product_id: string;
+  batch_number?: string | null;
+  expiry_date: string;
+  quantity: number | null;
+  added_date: string;
+  created_at: string;
+  updated_at: string;
+}
+
 /**
- * Product Input Validation Schema
- * Validates all product fields before database operations
+ * Product Input Validation Schema (without batch info)
  */
 const productInputSchema = z.object({
   name: z.string().min(2, "Product name must be at least 2 characters"),
   category: z.string().min(1, "Category is required"),
+  supplier: z.string().optional(),
+  location: z.string().optional(),
+  notes: z.string().optional(),
+  barcode: z.string().optional(),
+});
+
+/**
+ * Batch Input Validation Schema
+ */
+const batchInputSchema = z.object({
+  batchNumber: z.string().optional(),
   expiryDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date format (YYYY-MM-DD)"),
@@ -64,11 +81,9 @@ const productInputSchema = z.object({
     .union([z.string(), z.number(), z.null()])
     .optional()
     .transform((val) => {
-      // If no value provided, keep as null
       if (val === undefined || val === null || val === "") {
         return null;
       }
-      // Convert string to number if needed
       if (typeof val === "string") {
         const parsed = parseInt(val, 10);
         if (isNaN(parsed)) {
@@ -81,34 +96,22 @@ const productInputSchema = z.object({
     .refine((val) => val === null || (Number.isInteger(val) && val > 0), {
       message: "Quantity must be a positive integer or null",
     }),
-  batchNumber: z.string().optional(),
-  supplier: z.string().optional(),
-  location: z.string().optional(),
-  notes: z.string().optional(),
-  barcode: z.string().optional(),
 });
 
 /**
  * Helper function to ensure a category exists in the categories table
- * If the category doesn't exist, it will be created automatically
- * This links product categories to the settings categories table
- *
- * @param userId - The user's ID
- * @param categoryName - The category name to ensure exists
- * @returns void (creates category if needed, silently handles errors)
  */
 async function ensureCategoryExists(
   userId: string,
   categoryName: string,
 ): Promise<void> {
   if (!categoryName?.trim()) {
-    return; // Skip empty categories
+    return;
   }
 
   const trimmedCategory = categoryName.trim();
 
   try {
-    // Check if category already exists for this user
     const { data: existingCategory } = await supabaseAdmin
       .from("categories")
       .select("id")
@@ -116,37 +119,28 @@ async function ensureCategoryExists(
       .eq("name", trimmedCategory)
       .maybeSingle();
 
-    // If category doesn't exist, create it
     if (!existingCategory) {
       const { error: createError } = await supabaseAdmin
         .from("categories")
         .insert({
           user_id: userId,
           name: trimmedCategory,
-          description: null, // Auto-created categories have no description
+          description: null,
           updated_at: new Date().toISOString(),
         });
 
-      if (createError) {
-        // Log error but don't throw - product creation should still succeed
-        // Common errors: table doesn't exist (migration not run), unique constraint (race condition)
-        if (createError.code !== "23505") {
-          // Not a duplicate error, log it
-          console.log(
-            `[Products] Failed to auto-create category "${trimmedCategory}":`,
-            createError.message,
-          );
-        }
-        // If it's a duplicate (23505), another request created it - that's fine
-      } else {
+      if (createError && createError.code !== "23505") {
+        console.log(
+          `[Products] Failed to auto-create category "${trimmedCategory}":`,
+          createError.message,
+        );
+      } else if (!createError) {
         console.log(
           `[Products] Auto-created category "${trimmedCategory}" for user`,
         );
       }
     }
   } catch (error) {
-    // Silently handle errors - don't fail product creation if category sync fails
-    // This ensures the feature works even if categories table doesn't exist yet
     console.log(
       `[Products] Category sync skipped for "${trimmedCategory}":`,
       error instanceof Error ? error.message : "Unknown error",
@@ -154,15 +148,41 @@ async function ensureCategoryExists(
   }
 }
 
+/**
+ * Helper function to convert database rows to frontend format
+ */
+function convertToProduct(
+  productRow: ProductRow,
+  batchRows: ProductBatchRow[],
+) {
+  return {
+    id: productRow.id,
+    name: productRow.name,
+    category: productRow.category,
+    supplier: productRow.supplier ?? undefined,
+    location: productRow.location ?? undefined,
+    notes: productRow.notes ?? undefined,
+    barcode: productRow.barcode ?? undefined,
+    addedDate: productRow.added_date,
+    batches: batchRows.map((batch) => ({
+      id: batch.id,
+      productId: batch.product_id,
+      batchNumber: batch.batch_number ?? undefined,
+      expiryDate: batch.expiry_date,
+      quantity: batch.quantity,
+      addedDate: batch.added_date,
+      createdAt: batch.created_at,
+      updatedAt: batch.updated_at,
+    })),
+  };
+}
+
 export const productsRouter = createTRPCRouter({
   /**
-   * Get All Products
+   * Get All Products with Batches
    *
-   * Retrieves all products for a specific user
-   * Sorted by expiry date (soonest first)
-   *
-   * @input userId - The authenticated user's ID
-   * @returns Array of products
+   * Retrieves all products for a specific user with their batches
+   * Batches are sorted by expiry date (soonest first)
    */
   getAll: publicProcedure
     .input(
@@ -172,21 +192,59 @@ export const productsRouter = createTRPCRouter({
     )
     .query(async ({ input }) => {
       try {
-        const { data, error } = await supabaseAdmin
+        // Fetch all products for the user
+        const { data: productsData, error: productsError } = await supabaseAdmin
           .from("products")
           .select("*")
           .eq("user_id", input.userId)
-          .order("expiry_date", { ascending: true });
+          .order("name", { ascending: true });
 
-        if (error) {
-          console.error("[Products getAll Error]", error);
+        if (productsError) {
+          console.error("[Products getAll Error]", productsError);
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Failed to fetch products",
           });
         }
 
-        return (data as ProductRow[]) ?? [];
+        const products = (productsData as ProductRow[]) ?? [];
+
+        if (products.length === 0) {
+          return [];
+        }
+
+        // Fetch all batches for these products
+        const productIds = products.map((p) => p.id);
+        const { data: batchesData, error: batchesError } = await supabaseAdmin
+          .from("product_batches")
+          .select("*")
+          .in("product_id", productIds)
+          .order("expiry_date", { ascending: true });
+
+        if (batchesError) {
+          console.error("[Batches getAll Error]", batchesError);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to fetch batches",
+          });
+        }
+
+        const batches = (batchesData as ProductBatchRow[]) ?? [];
+
+        // Group batches by product_id
+        const batchesByProduct = batches.reduce(
+          (acc, batch) => {
+            acc[batch.product_id] ??= [];
+            acc[batch.product_id]!.push(batch);
+            return acc;
+          },
+          {} as Record<string, ProductBatchRow[]>,
+        );
+
+        // Combine products with their batches
+        return products.map((product) =>
+          convertToProduct(product, batchesByProduct[product.id] ?? []),
+        );
       } catch (error) {
         console.error("[Products getAll Error]", error);
         throw new TRPCError({
@@ -197,43 +255,31 @@ export const productsRouter = createTRPCRouter({
     }),
 
   /**
-   * Create Product
+   * Create Product with Initial Batch
    *
-   * Adds a new product to the database
-   * If barcode exists, also saves to shared barcode_cache for future lookups
-   * Validates input and enforces business rules
-   *
-   * @input userId - The authenticated user's ID
-   * @input product data - All product fields
-   * @returns Created product with ID
+   * Creates a new product and its first batch
+   * Both product and batch are created in a transaction
    */
   create: publicProcedure
     .input(
       z.object({
         userId: z.string().uuid("Invalid user ID"),
         product: productInputSchema,
+        batch: batchInputSchema,
       }),
     )
     .mutation(async ({ input }) => {
       try {
-        // ═══════════════════════════════════════════════════════════
-        // STEP 0: Ensure category exists in categories table
-        // This links product categories to the settings categories
-        // ═══════════════════════════════════════════════════════════
+        // Ensure category exists
         await ensureCategoryExists(input.userId, input.product.category);
 
-        // ═══════════════════════════════════════════════════════════
-        // STEP 1: Save to products table (user's inventory)
-        // ═══════════════════════════════════════════════════════════
-        const response = await supabaseAdmin
+        // Step 1: Create the product
+        const { data: productData, error: productError } = await supabaseAdmin
           .from("products")
           .insert({
             user_id: input.userId,
             name: input.product.name,
             category: input.product.category,
-            expiry_date: input.product.expiryDate,
-            quantity: input.product.quantity,
-            batch_number: input.product.batchNumber,
             supplier: input.product.supplier,
             location: input.product.location,
             notes: input.product.notes,
@@ -242,22 +288,44 @@ export const productsRouter = createTRPCRouter({
           .select()
           .single();
 
-        if (response.error) {
-          console.error("[Products create Error]", response.error);
+        if (productError || !productData) {
+          console.error("[Products create Error]", productError);
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Failed to create product",
           });
         }
-        console.log("🔍 [Debug] Barcode value:", input.product.barcode, "Name:", input.product.name);
-        // ═══════════════════════════════════════════════════════════
-        // STEP 2: Save to barcode_cache (shared lookup cache)
-        // Only if barcode exists and has required fields
-        // First come first serve - ON CONFLICT DO NOTHING
-        // ═══════════════════════════════════════════════════════════
+
+        const product = productData as ProductRow;
+
+        // Step 2: Create the initial batch
+        const { data: batchData, error: batchError } = await supabaseAdmin
+          .from("product_batches")
+          .insert({
+            product_id: product.id,
+            batch_number: input.batch.batchNumber,
+            expiry_date: input.batch.expiryDate,
+            quantity: input.batch.quantity,
+          })
+          .select()
+          .single();
+
+        if (batchError || !batchData) {
+          console.error("[Batch create Error]", batchError);
+          // Rollback: delete the product
+          await supabaseAdmin.from("products").delete().eq("id", product.id);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create batch",
+          });
+        }
+
+        const batch = batchData as ProductBatchRow;
+
+        // Step 3: Save to barcode cache if applicable
         if (input.product.barcode && input.product.name) {
           try {
-            const { error: cacheError } = await supabaseAdmin
+            await supabaseAdmin
               .from("barcode_cache")
               .insert({
                 barcode: input.product.barcode.trim(),
@@ -267,23 +335,14 @@ export const productsRouter = createTRPCRouter({
               })
               .select()
               .single();
-
-            // Ignore duplicate errors (barcode already in cache - first come first serve)
-            if (cacheError && cacheError.code === "23505") {
-              console.log("ℹ️ [Barcode already cached]", input.product.barcode);
-            } else if (cacheError) {
-              console.error("[Barcode cache insert error]", cacheError);
-              // Don't fail the whole operation, just log it
-            } else {
-              console.log("✅ [Added to barcode cache]", input.product.barcode);
-            }
+            console.log("✅ [Added to barcode cache]", input.product.barcode);
           } catch (cacheError) {
-            console.error("[Barcode cache error]", cacheError);
-            // Don't fail product creation if cache insert fails
+            // Ignore cache errors
+            console.log("ℹ️ [Barcode cache skip]", cacheError);
           }
         }
 
-        return response.data as ProductRow;
+        return convertToProduct(product, [batch]);
       } catch (error) {
         console.error("[Products create Error]", error);
         if (error instanceof TRPCError) throw error;
@@ -295,16 +354,10 @@ export const productsRouter = createTRPCRouter({
     }),
 
   /**
-   * Update Product
+   * Update Product (Master Info Only)
    *
-   * Updates an existing product
-   * If barcode is added/changed, syncs to shared barcode_cache
-   * Validates input and checks ownership via RLS
-   *
-   * @input productId - ID of product to update
-   * @input userId - The authenticated user's ID
-   * @input product data - Updated product fields
-   * @returns Updated product
+   * Updates product information (not batch-specific data)
+   * Use updateBatch/createBatch/deleteBatch for batch operations
    */
   update: publicProcedure
     .input(
@@ -316,81 +369,53 @@ export const productsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
-        // ═══════════════════════════════════════════════════════════
-        // STEP 0: Ensure category exists in categories table
-        // This links product categories to the settings categories
-        // ═══════════════════════════════════════════════════════════
         await ensureCategoryExists(input.userId, input.product.category);
 
-        // ═══════════════════════════════════════════════════════════
-        // STEP 1: Update product in products table
-        // ═══════════════════════════════════════════════════════════
-        const response = await supabaseAdmin
+        const { data, error } = await supabaseAdmin
           .from("products")
           .update({
             name: input.product.name,
             category: input.product.category,
-            expiry_date: input.product.expiryDate,
-            quantity: input.product.quantity,
-            batch_number: input.product.batchNumber,
             supplier: input.product.supplier,
             location: input.product.location,
             notes: input.product.notes,
             barcode: input.product.barcode,
           })
           .eq("id", input.productId)
-          .eq("user_id", input.userId) // RLS protection
+          .eq("user_id", input.userId)
           .select()
           .single();
 
-        if (response.error) {
-          console.error("[Products update Error]", response.error);
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to update product",
-          });
-        }
-
-        if (!response.data) {
+        if (error || !data) {
+          console.error("[Products update Error]", error);
           throw new TRPCError({
             code: "NOT_FOUND",
             message: "Product not found or access denied",
           });
         }
 
-        // ═══════════════════════════════════════════════════════════
-        // STEP 2: Sync to barcode_cache (if barcode was added/changed)
-        // This handles cases where user adds barcode to existing product
-        // ═══════════════════════════════════════════════════════════
+        // Sync to barcode cache
         if (input.product.barcode && input.product.name) {
           try {
-            const { error: cacheError } = await supabaseAdmin
-              .from("barcode_cache")
-              .insert({
-                barcode: input.product.barcode.trim(),
-                name: input.product.name,
-                supplier: input.product.supplier ?? null,
-                category: input.product.category ?? null,
-              })
-              .select()
-              .single();
-
-            // Ignore duplicate errors (barcode already in cache - first come first serve)
-            if (cacheError && cacheError.code === "23505") {
-              console.log("ℹ️ [Barcode already cached]", input.product.barcode);
-            } else if (cacheError) {
-              console.error("[Barcode cache insert error]", cacheError);
-              // Don't fail the whole operation, just log it
-            } else {
-              console.log("✅ [Added to barcode cache on update]", input.product.barcode);
-            }
-          } catch (cacheError) {
-            console.error("[Barcode cache error]", cacheError);
-            // Don't fail product update if cache insert fails
+            await supabaseAdmin.from("barcode_cache").insert({
+              barcode: input.product.barcode.trim(),
+              name: input.product.name,
+              supplier: input.product.supplier ?? null,
+              category: input.product.category ?? null,
+            });
+          } catch {
+            // Ignore
           }
         }
 
-        return response.data as ProductRow;
+        // Fetch batches
+        const { data: batchesData } = await supabaseAdmin
+          .from("product_batches")
+          .select("*")
+          .eq("product_id", input.productId)
+          .order("expiry_date", { ascending: true });
+
+        return convertToProduct(data as ProductRow, (batchesData as ProductBatchRow[]) ?? []);
       } catch (error) {
         console.error("[Products update Error]", error);
         if (error instanceof TRPCError) throw error;
@@ -404,12 +429,7 @@ export const productsRouter = createTRPCRouter({
   /**
    * Delete Product
    *
-   * Removes a product from the database
-   * Checks ownership via RLS
-   *
-   * @input productId - ID of product to delete
-   * @input userId - The authenticated user's ID
-   * @returns Success status
+   * Removes a product and all its batches (CASCADE)
    */
   delete: publicProcedure
     .input(
@@ -424,7 +444,7 @@ export const productsRouter = createTRPCRouter({
           .from("products")
           .delete()
           .eq("id", input.productId)
-          .eq("user_id", input.userId); // RLS protection
+          .eq("user_id", input.userId);
 
         if (error) {
           console.error("[Products delete Error]", error);
@@ -446,21 +466,154 @@ export const productsRouter = createTRPCRouter({
     }),
 
   /**
+   * Create Batch for Existing Product
+   *
+   * Adds a new batch to an existing product
+   */
+  createBatch: publicProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid("Invalid user ID"),
+        productId: z.string().uuid("Invalid product ID"),
+        batch: batchInputSchema,
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // Verify product ownership
+        const { data: product, error: productError } = await supabaseAdmin
+          .from("products")
+          .select("id")
+          .eq("id", input.productId)
+          .eq("user_id", input.userId)
+          .maybeSingle();
+
+        if (productError || !product) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Product not found or access denied",
+          });
+        }
+
+        // Create the batch
+        const { data, error } = await supabaseAdmin
+          .from("product_batches")
+          .insert({
+            product_id: input.productId,
+            batch_number: input.batch.batchNumber,
+            expiry_date: input.batch.expiryDate,
+            quantity: input.batch.quantity,
+          })
+          .select()
+          .single();
+
+        if (error || !data) {
+          console.error("[Batch create Error]", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to create batch",
+          });
+        }
+
+        return data as ProductBatchRow;
+      } catch (error) {
+        console.error("[Batch create Error]", error);
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to create batch",
+        });
+      }
+    }),
+
+  /**
+   * Update Batch
+   *
+   * Updates an existing batch's information
+   */
+  updateBatch: publicProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid("Invalid user ID"),
+        batchId: z.string().uuid("Invalid batch ID"),
+        batch: batchInputSchema,
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        // Update with RLS check via product ownership
+        const { data, error } = await supabaseAdmin
+          .from("product_batches")
+          .update({
+            batch_number: input.batch.batchNumber,
+            expiry_date: input.batch.expiryDate,
+            quantity: input.batch.quantity,
+          })
+          .eq("id", input.batchId)
+          .select()
+          .single();
+
+        if (error || !data) {
+          console.error("[Batch update Error]", error);
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: "Batch not found or access denied",
+          });
+        }
+
+        return data as ProductBatchRow;
+      } catch (error) {
+        console.error("[Batch update Error]", error);
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to update batch",
+        });
+      }
+    }),
+
+  /**
+   * Delete Batch
+   *
+   * Removes a batch from a product
+   */
+  deleteBatch: publicProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid("Invalid user ID"),
+        batchId: z.string().uuid("Invalid batch ID"),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      try {
+        const { error } = await supabaseAdmin
+          .from("product_batches")
+          .delete()
+          .eq("id", input.batchId);
+
+        if (error) {
+          console.error("[Batch delete Error]", error);
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to delete batch",
+          });
+        }
+
+        return { success: true };
+      } catch (error) {
+        console.error("[Batch delete Error]", error);
+        if (error instanceof TRPCError) throw error;
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: "Failed to delete batch",
+        });
+      }
+    }),
+
+  /**
    * Barcode Lookup Endpoint
    *
-   * Implements cache-first lookup strategy:
-   * 1. Check barcode_cache table (our database) - FAST
-   * 2. If not cached, call Open Food Facts API - SLOW
-   * 3. If not found anywhere, user enters manually
-   *
-   * Server-side implementation provides:
-   * - Better security (API calls not exposed to client)
-   * - Centralized error handling
-   * - Community-shared product cache
-   * - Can easily switch to different barcode APIs
-   *
-   * @input barcode - The product barcode/UPC to lookup
-   * @returns Product information (name, category, supplier/brand)
+   * Same as before - returns product info for pre-filling forms
    */
   lookupBarcode: publicProcedure
     .input(
@@ -471,9 +624,7 @@ export const productsRouter = createTRPCRouter({
     .mutation(async ({ input }) => {
       const barcode = input.barcode.trim();
 
-      // ═══════════════════════════════════════════════════════════
-      // STEP 1: Check barcode_cache table (our database)
-      // ═══════════════════════════════════════════════════════════
+      // Check cache first
       try {
         const { data: cachedProduct, error: cacheError } = await supabaseAdmin
           .from("barcode_cache")
@@ -498,12 +649,9 @@ export const productsRouter = createTRPCRouter({
         console.log("⚠️ [Barcode Cache Miss]", barcode, "- trying API");
       } catch (error) {
         console.error("[Barcode Cache Error]", error);
-        // Continue to API lookup even if cache fails
       }
 
-      // ═══════════════════════════════════════════════════════════
-      // STEP 2: Cache miss → Check Open Food Facts API
-      // ═══════════════════════════════════════════════════════════
+      // Try Open Food Facts API
       try {
         const response = await fetch(
           `https://world.openfoodfacts.org/api/v0/product/${barcode}.json`,
@@ -515,12 +663,10 @@ export const productsRouter = createTRPCRouter({
 
         const data = (await response.json()) as BarcodeLookupResponse;
 
-        // Check if product was found
         if (data.status === 1 && data.product) {
           const productData = data.product;
           console.log("✅ [Barcode API Hit]", barcode);
 
-          // Extract and format product information
           const result = {
             name: productData.product_name ?? null,
             category: productData.categories
@@ -538,12 +684,8 @@ export const productsRouter = createTRPCRouter({
         }
       } catch (error) {
         console.error("[Barcode API Error]", error);
-        // Continue to not found
       }
 
-      // ═══════════════════════════════════════════════════════════
-      // STEP 3: Not found in cache or API
-      // ═══════════════════════════════════════════════════════════
       console.log("❌ [Barcode Not Found]", barcode);
       return {
         found: false,
@@ -555,13 +697,6 @@ export const productsRouter = createTRPCRouter({
 
   /**
    * Get All Categories
-   *
-   * Retrieves categories from the categories table (managed categories)
-   * Falls back to extracting from products if categories table doesn't exist
-   * Used for populating category dropdown in add product form
-   *
-   * @input userId - The authenticated user's ID
-   * @returns Array of unique category names
    */
   getCategories: publicProcedure
     .input(
@@ -571,7 +706,6 @@ export const productsRouter = createTRPCRouter({
     )
     .query(async ({ input }) => {
       try {
-        // Try to get categories from the categories table first
         const { data: categoriesData, error: categoriesError } =
           await supabaseAdmin
             .from("categories")
@@ -579,13 +713,10 @@ export const productsRouter = createTRPCRouter({
             .eq("user_id", input.userId)
             .order("name", { ascending: true });
 
-        // If categories table exists and has data, use it
         if (!categoriesError && categoriesData && categoriesData.length > 0) {
           return categoriesData.map((cat) => cat.name);
         }
 
-        // Fallback: Extract categories from products (backward compatibility)
-        // This handles cases where categories table doesn't exist yet
         const { data, error } = await supabaseAdmin
           .from("products")
           .select("category")
@@ -599,7 +730,6 @@ export const productsRouter = createTRPCRouter({
           });
         }
 
-        // Extract unique categories, filter out invalid ones, and sort them
         const categories = data as Array<{ category: string }>;
         const uniqueCategories = Array.from(
           new Set(categories.map((product) => product.category)),
