@@ -31,7 +31,11 @@ import type { Product } from "~/types";
 import { Header } from "~/components/layout/Header";
 import { ProductForm } from "~/components/products/ProductForm";
 import { getDaysUntilExpiry, formatDate } from "~/utils/dateUtils";
-import { getEarliestBatch, getEarliestExpiryDate, getTotalQuantity } from "~/utils/batchHelpers";
+import {
+  getEarliestBatch,
+  getEarliestExpiryDate,
+  getTotalQuantity,
+} from "~/utils/batchHelpers";
 import { useToast } from "~/hooks/use-toast";
 import { api } from "~/trpc/react";
 
@@ -70,7 +74,7 @@ const transformProductFromDb = (row: ProductRow): Product => ({
   addedDate: row.added_date,
   batches: [], // TODO: Products page needs batch architecture update
   // TEMPORARY: These columns don't exist anymore after migration - page will not work
-  expiryDate: row.expiry_date ?? '2099-12-31',  // Fake date
+  expiryDate: row.expiry_date ?? "2099-12-31", // Fake date
   quantity: row.quantity ?? 0,
   batchNumber: row.batch_number ?? undefined,
 });
@@ -87,9 +91,13 @@ function ProductsPageContent() {
   const { toast } = useToast();
 
   // Fetch products with batches using tRPC
-  const { data: products = [], isLoading: productsLoading, refetch: refetchProducts } = api.products.getAll.useQuery(
-    { userId: user?.id ?? '' },
-    { enabled: !!user?.id }
+  const {
+    data: products = [],
+    isLoading: productsLoading,
+    refetch: refetchProducts,
+  } = api.products.getAll.useQuery(
+    { userId: user?.id ?? "" },
+    { enabled: !!user?.id },
   );
 
   // UI state
@@ -254,7 +262,6 @@ function ProductsPageContent() {
   const updateProductMutation = api.products.update.useMutation();
   const deleteProductMutation = api.products.delete.useMutation();
 
-
   // Capture productId from query string whenever it changes
   useEffect(() => {
     const productIdFromQuery = searchParams?.get("productId");
@@ -285,7 +292,6 @@ function ProductsPageContent() {
     }
   }, [isAuthenticated, loading, router]);
 
-
   /**
    * Filter, Sort, and Paginate Products
    * This is the main data transformation pipeline that:
@@ -306,7 +312,7 @@ function ProductsPageContent() {
       if (parsedDate) {
         // If it's a date, filter by any batch expiry date match
         result = result.filter((product) => {
-          return (product.batches ?? []).some(batch => {
+          return (product.batches ?? []).some((batch) => {
             const expiryDate = new Date(batch.expiryDate);
             expiryDate.setHours(0, 0, 0, 0);
             const searchDate = new Date(parsedDate);
@@ -320,8 +326,10 @@ function ProductsPageContent() {
           (product) =>
             product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
             product.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            (product.batches ?? []).some(batch =>
-              batch.batchNumber?.toLowerCase().includes(searchTerm.toLowerCase())
+            (product.batches ?? []).some((batch) =>
+              batch.batchNumber
+                ?.toLowerCase()
+                .includes(searchTerm.toLowerCase()),
             ),
         );
       }
@@ -397,8 +405,12 @@ function ProductsPageContent() {
           {
             const aExpiry = getEarliestExpiryDate(a);
             const bExpiry = getEarliestExpiryDate(b);
-            aVal = aExpiry ? new Date(aExpiry).getTime() : Number.MAX_SAFE_INTEGER;
-            bVal = bExpiry ? new Date(bExpiry).getTime() : Number.MAX_SAFE_INTEGER;
+            aVal = aExpiry
+              ? new Date(aExpiry).getTime()
+              : Number.MAX_SAFE_INTEGER;
+            bVal = bExpiry
+              ? new Date(bExpiry).getTime()
+              : Number.MAX_SAFE_INTEGER;
           }
           break;
         case "status":
@@ -406,8 +418,12 @@ function ProductsPageContent() {
           {
             const aExpiry = getEarliestExpiryDate(a);
             const bExpiry = getEarliestExpiryDate(b);
-            aVal = aExpiry ? new Date(aExpiry).getTime() : Number.MAX_SAFE_INTEGER;
-            bVal = bExpiry ? new Date(bExpiry).getTime() : Number.MAX_SAFE_INTEGER;
+            aVal = aExpiry
+              ? new Date(aExpiry).getTime()
+              : Number.MAX_SAFE_INTEGER;
+            bVal = bExpiry
+              ? new Date(bExpiry).getTime()
+              : Number.MAX_SAFE_INTEGER;
           }
           break;
         case "quantity":
@@ -503,7 +519,9 @@ function ProductsPageContent() {
       all: dateFilteredProducts.length,
       expired: dateFilteredProducts.filter((p) => {
         const earliestExpiryDate = getEarliestExpiryDate(p);
-        return earliestExpiryDate ? getDaysUntilExpiry(earliestExpiryDate) < 0 : false;
+        return earliestExpiryDate
+          ? getDaysUntilExpiry(earliestExpiryDate) < 0
+          : false;
       }).length,
       "expiring-soon": dateFilteredProducts.filter((p) => {
         const earliestExpiryDate = getEarliestExpiryDate(p);
@@ -513,7 +531,9 @@ function ProductsPageContent() {
       }).length,
       good: dateFilteredProducts.filter((p) => {
         const earliestExpiryDate = getEarliestExpiryDate(p);
-        return earliestExpiryDate ? getDaysUntilExpiry(earliestExpiryDate) > 7 : false;
+        return earliestExpiryDate
+          ? getDaysUntilExpiry(earliestExpiryDate) > 7
+          : false;
       }).length,
     };
   }, [products, startDate, endDate]);
@@ -806,8 +826,8 @@ function ProductsPageContent() {
       // Check if clicking on checkbox button or its children (SVG check icon)
       const isCheckboxClick = Boolean(
         (event.target.closest('button[type="button"]')?.querySelector("svg") ??
-        event.target.tagName === "svg") ||
-        event.target.closest("[data-state]")
+          event.target.tagName === "svg") ||
+          event.target.closest("[data-state]"),
       );
 
       if (isCheckboxClick) {
@@ -1448,13 +1468,17 @@ function ProductsPageContent() {
                                 return (
                                   <>
                                     <div className="flex items-center justify-between">
-                                      <span className="text-gray-500">Earliest Expiry:</span>
+                                      <span className="text-gray-500">
+                                        Earliest Expiry:
+                                      </span>
                                       <span className="font-medium text-gray-900">
                                         {formatDate(earliestBatch.expiryDate)}
                                       </span>
                                     </div>
                                     <div className="flex items-center justify-between">
-                                      <span className="text-gray-500">Total Qty:</span>
+                                      <span className="text-gray-500">
+                                        Total Qty:
+                                      </span>
                                       <span className="font-medium text-gray-900">
                                         {getTotalQuantity(product)}
                                       </span>
@@ -1465,8 +1489,11 @@ function ProductsPageContent() {
                             </div>
                             <div className="mt-2">
                               {(() => {
-                                const earliestExpiryDate = getEarliestExpiryDate(product);
-                                return earliestExpiryDate ? getStatusBadge(earliestExpiryDate) : null;
+                                const earliestExpiryDate =
+                                  getEarliestExpiryDate(product);
+                                return earliestExpiryDate
+                                  ? getStatusBadge(earliestExpiryDate)
+                                  : null;
                               })()}
                             </div>
                           </div>
@@ -1622,21 +1649,28 @@ function ProductsPageContent() {
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
                           {(() => {
-                            const earliestExpiryDate = getEarliestExpiryDate(product);
-                            return earliestExpiryDate ? formatDate(earliestExpiryDate) : "-";
+                            const earliestExpiryDate =
+                              getEarliestExpiryDate(product);
+                            return earliestExpiryDate
+                              ? formatDate(earliestExpiryDate)
+                              : "-";
                           })()}
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap">
                           {(() => {
-                            const earliestExpiryDate = getEarliestExpiryDate(product);
-                            return earliestExpiryDate ? getStatusBadge(earliestExpiryDate) : null;
+                            const earliestExpiryDate =
+                              getEarliestExpiryDate(product);
+                            return earliestExpiryDate
+                              ? getStatusBadge(earliestExpiryDate)
+                              : null;
                           })()}
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-900">
                           {getTotalQuantity(product)}
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
-                          {(product.batches ?? []).length} batch{(product.batches ?? []).length !== 1 ? 'es' : ''}
+                          {(product.batches ?? []).length} batch
+                          {(product.batches ?? []).length !== 1 ? "es" : ""}
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
                           <div className="flex items-center gap-2">
@@ -1934,16 +1968,24 @@ function ProductsPageContent() {
           </div>
         )}
 
-        {/* Floating Action Button for Bulk Delete - Desktop/Tablet */}
+        {/* Floating Action Buttons for Bulk Operations - Desktop/Tablet */}
         {selectedIds.size > 0 && (
           <>
-            <div className="fixed right-6 bottom-6 z-40 hidden transition-all duration-300 md:block">
+            <div className="fixed right-6 bottom-6 z-40 hidden flex-col gap-2 transition-all duration-300 md:flex">
+              <button
+                onClick={handleClearSelection}
+                className="flex items-center gap-2 rounded-full border-2 border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 shadow-lg transition-all hover:bg-gray-50 hover:shadow-xl active:scale-95"
+                aria-label="Unselect all products"
+              >
+                <X className="h-4 w-4" />
+                <span>Unselect All</span>
+              </button>
               <button
                 onClick={() => setBulkDeleteModalOpen(true)}
-                className="flex items-center gap-3 rounded-full bg-red-600 px-6 py-4 font-medium text-white shadow-lg transition-all hover:bg-red-700 hover:shadow-xl active:scale-95"
+                className="flex items-center gap-2 rounded-full bg-red-600 px-4 py-2.5 text-sm font-medium text-white shadow-lg transition-all hover:bg-red-700 hover:shadow-xl active:scale-95"
                 aria-label={`Delete ${selectedIds.size} selected product${selectedIds.size !== 1 ? "s" : ""}`}
               >
-                <Trash2 className="h-5 w-5" />
+                <Trash2 className="h-4 w-4" />
                 <span>
                   Delete {selectedIds.size}{" "}
                   {selectedIds.size === 1 ? "product" : "products"}
@@ -1951,19 +1993,30 @@ function ProductsPageContent() {
               </button>
             </div>
 
-            {/* Mobile FAB - Full width on small screens */}
+            {/* Mobile Action Bar - Full width on small screens */}
             <div className="fixed right-0 bottom-0 left-0 z-40 block transition-all duration-300 md:hidden">
-              <div className="border-t border-gray-200 bg-white p-4 shadow-lg">
-                <button
-                  onClick={() => setBulkDeleteModalOpen(true)}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-red-600 px-6 py-3 font-medium text-white transition-colors hover:bg-red-700"
-                >
-                  <Trash2 className="h-5 w-5" />
-                  <span>
-                    Delete {selectedIds.size}{" "}
-                    {selectedIds.size === 1 ? "product" : "products"}
-                  </span>
-                </button>
+              <div className="border-t border-gray-200 bg-white p-3 shadow-lg">
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleClearSelection}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border-2 border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 active:bg-gray-100"
+                    aria-label="Unselect all products"
+                  >
+                    <X className="h-4 w-4" />
+                    <span className="hidden sm:inline">Unselect All</span>
+                    <span className="sm:hidden">Clear</span>
+                  </button>
+                  <button
+                    onClick={() => setBulkDeleteModalOpen(true)}
+                    className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700 active:bg-red-800"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                    <span>
+                      Delete {selectedIds.size}{" "}
+                      {selectedIds.size === 1 ? "product" : "products"}
+                    </span>
+                  </button>
+                </div>
               </div>
             </div>
           </>
