@@ -677,14 +677,19 @@ function ProductsPageContent() {
           },
         });
 
-        // Delete removed batches first
+        // Collect all batch operations to run in parallel
+        const batchOperations: Promise<unknown>[] = [];
+
+        // Delete removed batches
         if (productData.deletedBatchIds && productData.deletedBatchIds.length > 0) {
-          for (const batchId of productData.deletedBatchIds) {
-            await deleteBatchMutation.mutateAsync({
-              userId: user.id,
-              batchId,
-            });
-          }
+          productData.deletedBatchIds.forEach(batchId => {
+            batchOperations.push(
+              deleteBatchMutation.mutateAsync({
+                userId: user.id,
+                batchId,
+              })
+            );
+          });
         }
 
         // Handle all batches if provided (from ProductForm)
@@ -692,34 +697,43 @@ function ProductsPageContent() {
           const existingBatches = selectedProduct.batches ?? [];
           const existingBatchIds = new Set(existingBatches.map(b => b.id));
 
-          // Process each batch
-          for (const batch of productData.allBatches) {
+          // Collect create and update operations
+          productData.allBatches.forEach(batch => {
             const isNewBatch = batch.tempId.startsWith('temp-');
 
             if (isNewBatch) {
               // Create new batch
-              await createBatchMutation.mutateAsync({
-                userId: user.id,
-                productId: selectedProduct.id,
-                batch: {
-                  expiryDate: batch.expiryDate,
-                  quantity: batch.quantity ? (typeof batch.quantity === "string" ? parseInt(batch.quantity, 10) : batch.quantity) : null,
-                  batchNumber: batch.batchNumber || undefined,
-                },
-              });
+              batchOperations.push(
+                createBatchMutation.mutateAsync({
+                  userId: user.id,
+                  productId: selectedProduct.id,
+                  batch: {
+                    expiryDate: batch.expiryDate,
+                    quantity: batch.quantity ? (typeof batch.quantity === "string" ? parseInt(batch.quantity, 10) : batch.quantity) : null,
+                    batchNumber: batch.batchNumber || undefined,
+                  },
+                })
+              );
             } else if (existingBatchIds.has(batch.tempId)) {
               // Update existing batch
-              await updateBatchMutation.mutateAsync({
-                userId: user.id,
-                batchId: batch.tempId,
-                batch: {
-                  expiryDate: batch.expiryDate,
-                  quantity: batch.quantity ? (typeof batch.quantity === "string" ? parseInt(batch.quantity, 10) : batch.quantity) : null,
-                  batchNumber: batch.batchNumber || undefined,
-                },
-              });
+              batchOperations.push(
+                updateBatchMutation.mutateAsync({
+                  userId: user.id,
+                  batchId: batch.tempId,
+                  batch: {
+                    expiryDate: batch.expiryDate,
+                    quantity: batch.quantity ? (typeof batch.quantity === "string" ? parseInt(batch.quantity, 10) : batch.quantity) : null,
+                    batchNumber: batch.batchNumber || undefined,
+                  },
+                })
+              );
             }
-          }
+          });
+        }
+
+        // Execute all batch operations in parallel for better performance
+        if (batchOperations.length > 0) {
+          await Promise.all(batchOperations);
         }
 
         toast({
