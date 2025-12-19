@@ -371,7 +371,7 @@ export const ProductForm = ({
       return;
     }
 
-    const submitData: Omit<Product, "id" | "addedDate"> = {
+    const submitData: Omit<Product, "id" | "addedDate"> & { allBatches?: BatchFormData[] } = {
       name: formData.name,
       category: formData.category,
       expiryDate: firstBatch.expiryDate,
@@ -381,6 +381,7 @@ export const ProductForm = ({
       location: formData.location || undefined,
       notes: formData.notes || undefined,
       barcode: barcode.trim() ? barcode.trim() : undefined,
+      allBatches: batches, // Pass all batches for proper handling
     };
 
     // Submit the form

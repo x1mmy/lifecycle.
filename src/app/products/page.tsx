@@ -587,8 +587,9 @@ function ProductsPageContent() {
     setDeleteModalOpen(true);
   };
 
-  // Get updateBatch mutation for batch updates
+  // Get batch mutations
   const updateBatchMutation = api.products.updateBatch.useMutation();
+  const createBatchMutation = api.products.createBatch.useMutation();
 
   /**
    * Submit Product Handler
@@ -596,7 +597,7 @@ function ProductsPageContent() {
    * After mutation, refreshes data with refetchProducts()
    */
   const handleSubmitProduct = async (
-    productData: Omit<Product, "id" | "addedDate">,
+    productData: Omit<Product, "id" | "addedDate"> & { allBatches?: Array<{ tempId: string; expiryDate: string; quantity: string | number; batchNumber: string }> },
   ) => {
     if (!user) return;
 
@@ -617,20 +618,38 @@ function ProductsPageContent() {
           },
         });
 
-        // Update the first batch if batch data was provided
-        // (ProductForm sends first batch data in old format for backwards compatibility)
-        if (productData.expiryDate && selectedProduct.batches && selectedProduct.batches.length > 0) {
-          const firstBatch = selectedProduct.batches[0];
-          if (firstBatch) {
-            await updateBatchMutation.mutateAsync({
-              userId: user.id,
-              batchId: firstBatch.id,
-              batch: {
-                expiryDate: productData.expiryDate,
-                quantity: productData.quantity ?? null,
-                batchNumber: productData.batchNumber,
-              },
-            });
+        // Handle all batches if provided (from ProductForm)
+        if (productData.allBatches && productData.allBatches.length > 0) {
+          const existingBatches = selectedProduct.batches ?? [];
+          const existingBatchIds = new Set(existingBatches.map(b => b.id));
+
+          // Process each batch
+          for (const batch of productData.allBatches) {
+            const isNewBatch = batch.tempId.startsWith('temp-');
+
+            if (isNewBatch) {
+              // Create new batch
+              await createBatchMutation.mutateAsync({
+                userId: user.id,
+                productId: selectedProduct.id,
+                batch: {
+                  expiryDate: batch.expiryDate,
+                  quantity: batch.quantity ? (typeof batch.quantity === "string" ? parseInt(batch.quantity, 10) : batch.quantity) : null,
+                  batchNumber: batch.batchNumber || undefined,
+                },
+              });
+            } else if (existingBatchIds.has(batch.tempId)) {
+              // Update existing batch
+              await updateBatchMutation.mutateAsync({
+                userId: user.id,
+                batchId: batch.tempId,
+                batch: {
+                  expiryDate: batch.expiryDate,
+                  quantity: batch.quantity ? (typeof batch.quantity === "string" ? parseInt(batch.quantity, 10) : batch.quantity) : null,
+                  batchNumber: batch.batchNumber || undefined,
+                },
+              });
+            }
           }
         }
 
