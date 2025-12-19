@@ -624,12 +624,12 @@ function ProductsPageContent() {
         description: `Batch removed from "${productName}"`,
       });
 
-      // Refresh products and get the updated data
-      const { data: updatedProducts } = await refetchProducts();
+      // Refresh products
+      await refetchProducts();
 
-      // Update the selected product in the panel with fresh data
-      if (product && updatedProducts) {
-        const updatedProduct = updatedProducts.find(p => p.id === product.id);
+      // Update the selected product in the panel
+      if (product) {
+        const updatedProduct = products.find(p => p.id === product.id);
         if (updatedProduct) {
           setSelectedProductForBatches(updatedProduct);
         } else {
