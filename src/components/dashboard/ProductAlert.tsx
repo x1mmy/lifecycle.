@@ -161,7 +161,7 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
             transition: swipeOffset === 0 || Math.abs(swipeOffset) === 100 ? 'transform 0.3s ease-out' : 'none',
           }}
         >
-          <Icon className={`h-5 w-5 mt-0.5 flex-shrink-0 ${textColor}`} />
+          <Icon className={`h-5 w-5 mt-0.5 shrink-0 ${textColor}`} />
 
           <div className="flex-1 min-w-0">
             <p className="font-medium text-gray-900">{product.name}</p>

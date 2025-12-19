@@ -587,6 +587,9 @@ function ProductsPageContent() {
     setDeleteModalOpen(true);
   };
 
+  // Get updateBatch mutation for batch updates
+  const updateBatchMutation = api.products.updateBatch.useMutation();
+
   /**
    * Submit Product Handler
    * Uses tRPC mutations for server-side validation and business logic
@@ -613,6 +616,23 @@ function ProductsPageContent() {
             barcode: productData.barcode,
           },
         });
+
+        // Update the first batch if batch data was provided
+        // (ProductForm sends first batch data in old format for backwards compatibility)
+        if (productData.expiryDate && selectedProduct.batches && selectedProduct.batches.length > 0) {
+          const firstBatch = selectedProduct.batches[0];
+          if (firstBatch) {
+            await updateBatchMutation.mutateAsync({
+              userId: user.id,
+              batchId: firstBatch.id,
+              batch: {
+                expiryDate: productData.expiryDate,
+                quantity: productData.quantity ?? null,
+                batchNumber: productData.batchNumber,
+              },
+            });
+          }
+        }
 
         toast({
           title: "Product updated",
@@ -1780,7 +1800,7 @@ function ProductsPageContent() {
                               )}
                               <button
                                 onClick={() => setCurrentPage(page)}
-                                className={`min-w-[2.5rem] rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                                className={`min-w-10 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                                   currentPage === page
                                     ? "bg-[#059669] text-white"
                                     : "border border-gray-200 hover:bg-white"
@@ -1853,7 +1873,7 @@ function ProductsPageContent() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
               <div className="mb-4 flex items-start gap-4">
-                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100">
                   <AlertCircle className="h-6 w-6 text-red-600" />
                 </div>
                 <div className="flex-1">
@@ -2027,7 +2047,7 @@ function ProductsPageContent() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
               <div className="mb-4 flex items-start gap-4">
-                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100">
                   <AlertCircle className="h-6 w-6 text-red-600" />
                 </div>
                 <div className="flex-1">

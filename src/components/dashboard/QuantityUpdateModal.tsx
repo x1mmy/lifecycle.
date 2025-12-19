@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Package } from 'lucide-react';
-import type { Product } from '~/types';
+import type { Product, ProductBatch } from '~/types';
 import { Button } from '~/components/ui/button';
 import { Input } from '~/components/ui/input';
 import { Label } from '~/components/ui/label';
 import { useToast } from '~/hooks/use-toast';
 import { api } from '~/trpc/react';
+import { formatDate } from '~/utils/dateUtils';
 
 interface QuantityUpdateModalProps {
   product: Product;
@@ -23,18 +24,29 @@ export const QuantityUpdateModal = ({
   onUpdate,
 }: QuantityUpdateModalProps) => {
   const { toast } = useToast();
-  const [quantity, setQuantity] = useState(product.quantity?.toString() ?? '');
-  const [error, setError] = useState('');
+  const utils = api.useUtils();
 
-  // tRPC mutation for updating product
-  const updateProduct = api.products.update.useMutation({
-    onSuccess: () => {
-      toast({
-        title: 'Success',
-        description: `Updated quantity for "${product.name}"`,
+  // Track quantities for each batch
+  const [batchQuantities, setBatchQuantities] = useState<Record<string, string>>({});
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Reset quantities when modal opens or product changes
+  useEffect(() => {
+    if (isOpen) {
+      const quantities: Record<string, string> = {};
+      (product.batches ?? []).forEach(batch => {
+        quantities[batch.id] = batch.quantity?.toString() ?? '';
       });
-      onUpdate(); // Reload products
-      onClose();
+      setBatchQuantities(quantities);
+      setErrors({});
+    }
+  }, [isOpen, product]);
+
+  // tRPC mutation for updating batch
+  const updateBatch = api.products.updateBatch.useMutation({
+    onSuccess: async () => {
+      // Invalidate products cache to refetch with updated quantities
+      await utils.products.getAll.invalidate({ userId });
     },
     onError: (error) => {
       toast({
@@ -45,48 +57,83 @@ export const QuantityUpdateModal = ({
     },
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleQuantityChange = (batchId: string, value: string) => {
+    setBatchQuantities(prev => ({ ...prev, [batchId]: value }));
+    setErrors(prev => ({ ...prev, [batchId]: '' }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation
-    if (!quantity || quantity.trim() === '') {
-      setError('Quantity is required');
-      return;
-    }
+    const newErrors: Record<string, string> = {};
+    const batches = product.batches ?? [];
 
-    const numValue = parseInt(quantity, 10);
-    if (isNaN(numValue) || numValue < 0) {
-      setError('Quantity must be a positive number');
-      return;
-    }
-
-    // Update product with new quantity
-    // NOTE: This needs batch architecture update - quantity is per batch now
-    updateProduct.mutate({
-      productId: product.id,
-      userId,
-      product: {
-        name: product.name,
-        category: product.category,
-        // expiryDate, quantity, batchNumber are batch-specific now
-        supplier: product.supplier,
-        location: product.location,
-        notes: product.notes,
-      },
+    // Validate all batches
+    batches.forEach(batch => {
+      const qty = batchQuantities[batch.id];
+      if (qty && qty.trim() !== '') {
+        const numValue = parseInt(qty, 10);
+        if (isNaN(numValue) || numValue < 0) {
+          newErrors[batch.id] = 'Must be a positive number';
+        }
+      }
     });
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
+      return;
+    }
+
+    // Update all batches with changed quantities
+    try {
+      const updatePromises = batches
+        .filter(batch => {
+          const newQty = batchQuantities[batch.id];
+          const oldQty = batch.quantity?.toString() ?? '';
+          return newQty !== oldQty; // Only update if changed
+        })
+        .map(batch => {
+          const qty = batchQuantities[batch.id];
+          return updateBatch.mutateAsync({
+            userId,
+            batchId: batch.id,
+            batch: {
+              expiryDate: batch.expiryDate,
+              quantity: qty && qty.trim() !== '' ? parseInt(qty, 10) : null,
+              batchNumber: batch.batchNumber,
+            },
+          });
+        });
+
+      if (updatePromises.length > 0) {
+        await Promise.all(updatePromises);
+        toast({
+          title: 'Success',
+          description: `Updated ${updatePromises.length} batch${updatePromises.length !== 1 ? 'es' : ''}`,
+        });
+      }
+
+      onUpdate(); // Reload products
+      onClose();
+    } catch (error) {
+      // Error already handled by mutation
+      console.error('Error updating batches:', error);
+    }
   };
 
   if (!isOpen) return null;
 
+  const batches = product.batches ?? [];
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-gray-200 p-4">
           <div className="flex items-center gap-2">
             <Package className="h-5 w-5 text-[#10B981]" />
             <h2 className="text-lg font-semibold text-gray-900">
-              Update Quantity
+              Update Quantities
             </h2>
           </div>
           <button
@@ -102,42 +149,72 @@ export const QuantityUpdateModal = ({
         <form onSubmit={handleSubmit} className="p-4 space-y-4">
           <div>
             <p className="text-sm text-gray-600 mb-4">
-              Updating quantity for: <span className="font-medium text-gray-900">{product.name}</span>
+              Updating quantities for: <span className="font-medium text-gray-900">{product.name}</span>
             </p>
 
-            <Label htmlFor="quantity">New Quantity</Label>
-            <Input
-              id="quantity"
-              type="number"
-              min="0"
-              value={quantity}
-              onChange={(e) => {
-                setQuantity(e.target.value);
-                setError('');
-              }}
-              className={error ? 'border-red-500' : ''}
-              placeholder="Enter quantity..."
-              autoFocus
-            />
-            {error && (
-              <p className="mt-1 text-sm text-red-600">{error}</p>
+            {batches.length === 0 ? (
+              <p className="text-sm text-gray-500 py-4 text-center">
+                No batches found for this product
+              </p>
+            ) : (
+              <div className="space-y-4 max-h-100 overflow-y-auto">
+                {batches.map((batch, index) => (
+                  <div
+                    key={batch.id}
+                    className="border border-gray-200 rounded-lg p-3 bg-gray-50"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-700">
+                        Batch #{index + 1}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        Expires: {formatDate(batch.expiryDate)}
+                      </span>
+                    </div>
+
+                    {batch.batchNumber && (
+                      <p className="text-xs text-gray-500 mb-2">
+                        Batch Number: {batch.batchNumber}
+                      </p>
+                    )}
+
+                    <div>
+                      <Label htmlFor={`quantity-${batch.id}`} className="text-sm">
+                        Quantity
+                      </Label>
+                      <Input
+                        id={`quantity-${batch.id}`}
+                        type="number"
+                        min="0"
+                        value={batchQuantities[batch.id] ?? ''}
+                        onChange={(e) => handleQuantityChange(batch.id, e.target.value)}
+                        className={errors[batch.id] ? 'border-red-500' : ''}
+                        placeholder="Enter quantity..."
+                      />
+                      {errors[batch.id] && (
+                        <p className="mt-1 text-xs text-red-600">{errors[batch.id]}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
 
           {/* Actions */}
-          <div className="flex gap-3 pt-2">
+          <div className="flex gap-3 pt-2 border-t border-gray-200">
             <Button
               type="submit"
               className="flex-1"
-              disabled={updateProduct.isPending}
+              disabled={updateBatch.isPending || batches.length === 0}
             >
-              {updateProduct.isPending ? 'Updating...' : 'Update'}
+              {updateBatch.isPending ? 'Updating...' : 'Update All'}
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={onClose}
-              disabled={updateProduct.isPending}
+              disabled={updateBatch.isPending}
             >
               Cancel
             </Button>
