@@ -662,28 +662,30 @@ function ProductsPageContent() {
 
     try {
       if (selectedProduct) {
-        // Update existing product via tRPC
-        await updateProductMutation.mutateAsync({
-          productId: selectedProduct.id,
-          userId: user.id,
-          product: {
-            name: productData.name,
-            category: productData.category,
-            // expiryDate, quantity, batchNumber are batch-specific now
-            supplier: productData.supplier,
-            location: productData.location,
-            notes: productData.notes,
-            barcode: productData.barcode,
-          },
-        });
+        // Collect all operations to run in parallel
+        const allOperations: Promise<unknown>[] = [];
 
-        // Collect all batch operations to run in parallel
-        const batchOperations: Promise<unknown>[] = [];
+        // Add product update operation
+        allOperations.push(
+          updateProductMutation.mutateAsync({
+            productId: selectedProduct.id,
+            userId: user.id,
+            product: {
+              name: productData.name,
+              category: productData.category,
+              // expiryDate, quantity, batchNumber are batch-specific now
+              supplier: productData.supplier,
+              location: productData.location,
+              notes: productData.notes,
+              barcode: productData.barcode,
+            },
+          })
+        );
 
         // Delete removed batches
         if (productData.deletedBatchIds && productData.deletedBatchIds.length > 0) {
           productData.deletedBatchIds.forEach(batchId => {
-            batchOperations.push(
+            allOperations.push(
               deleteBatchMutation.mutateAsync({
                 userId: user.id,
                 batchId,
@@ -695,7 +697,7 @@ function ProductsPageContent() {
         // Handle all batches if provided (from ProductForm)
         if (productData.allBatches && productData.allBatches.length > 0) {
           const existingBatches = selectedProduct.batches ?? [];
-          const existingBatchIds = new Set(existingBatches.map(b => b.id));
+          const existingBatchMap = new Map(existingBatches.map(b => [b.id, b]));
 
           // Collect create and update operations
           productData.allBatches.forEach(batch => {
@@ -703,7 +705,7 @@ function ProductsPageContent() {
 
             if (isNewBatch) {
               // Create new batch
-              batchOperations.push(
+              allOperations.push(
                 createBatchMutation.mutateAsync({
                   userId: user.id,
                   productId: selectedProduct.id,
@@ -714,27 +716,36 @@ function ProductsPageContent() {
                   },
                 })
               );
-            } else if (existingBatchIds.has(batch.tempId)) {
-              // Update existing batch
-              batchOperations.push(
-                updateBatchMutation.mutateAsync({
-                  userId: user.id,
-                  batchId: batch.tempId,
-                  batch: {
-                    expiryDate: batch.expiryDate,
-                    quantity: batch.quantity ? (typeof batch.quantity === "string" ? parseInt(batch.quantity, 10) : batch.quantity) : null,
-                    batchNumber: batch.batchNumber || undefined,
-                  },
-                })
-              );
+            } else {
+              const existingBatch = existingBatchMap.get(batch.tempId);
+              if (existingBatch) {
+                // Only update if data has changed
+                const newQuantity = batch.quantity ? (typeof batch.quantity === "string" ? parseInt(batch.quantity, 10) : batch.quantity) : null;
+                const hasChanged =
+                  existingBatch.expiryDate !== batch.expiryDate ||
+                  existingBatch.quantity !== newQuantity ||
+                  existingBatch.batchNumber !== (batch.batchNumber || undefined);
+
+                if (hasChanged) {
+                  allOperations.push(
+                    updateBatchMutation.mutateAsync({
+                      userId: user.id,
+                      batchId: batch.tempId,
+                      batch: {
+                        expiryDate: batch.expiryDate,
+                        quantity: newQuantity,
+                        batchNumber: batch.batchNumber || undefined,
+                      },
+                    })
+                  );
+                }
+              }
             }
           });
         }
 
-        // Execute all batch operations in parallel for better performance
-        if (batchOperations.length > 0) {
-          await Promise.all(batchOperations);
-        }
+        // Execute all operations (product + batches) in parallel for maximum performance
+        await Promise.all(allOperations);
 
         toast({
           title: "Product updated",
