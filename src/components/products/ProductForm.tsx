@@ -107,6 +107,7 @@ export const ProductForm = ({
   const [barcode, setBarcode] = useState<string>("");
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [deletedBatchIds, setDeletedBatchIds] = useState<string[]>([]); // Track deleted batch IDs
 
   // Batch management functions
   const addBatch = () => {
@@ -130,6 +131,12 @@ export const ProductForm = ({
       });
       return;
     }
+
+    // If this is an existing batch (not a temp ID), track it for deletion
+    if (!tempId.startsWith('temp-')) {
+      setDeletedBatchIds((prev) => [...prev, tempId]);
+    }
+
     setBatches(batches.filter((batch) => batch.tempId !== tempId));
   };
 
@@ -371,7 +378,7 @@ export const ProductForm = ({
       return;
     }
 
-    const submitData: Omit<Product, "id" | "addedDate"> & { allBatches?: BatchFormData[] } = {
+    const submitData: Omit<Product, "id" | "addedDate"> & { allBatches?: BatchFormData[]; deletedBatchIds?: string[] } = {
       name: formData.name,
       category: formData.category,
       expiryDate: firstBatch.expiryDate,
@@ -382,6 +389,7 @@ export const ProductForm = ({
       notes: formData.notes || undefined,
       barcode: barcode.trim() ? barcode.trim() : undefined,
       allBatches: batches, // Pass all batches for proper handling
+      deletedBatchIds: deletedBatchIds.length > 0 ? deletedBatchIds : undefined, // Pass deleted batch IDs
     };
 
     // Submit the form
@@ -623,7 +631,7 @@ export const ProductForm = ({
                 </Button>
               </div>
 
-              <div className="space-y-3 max-h-125 overflow-y-auto pr-2">
+              <div className="space-y-3 max-h-100 overflow-y-auto pr-2">
                 {batches.map((batch, index) => (
                   <div
                     key={batch.tempId}
