@@ -172,6 +172,9 @@ function ProductsPageContent() {
   const [bulkDeleteModalOpen, setBulkDeleteModalOpen] = useState(false);
   const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
+  // Batch detail panel state
+  const [selectedProductForBatches, setSelectedProductForBatches] = useState<Product | null>(null);
+
   /**
    * Parse date string from search term
    * Detects various date formats and converts them to YYYY-MM-DD
@@ -587,13 +590,73 @@ function ProductsPageContent() {
     setDeleteModalOpen(true);
   };
 
+  // Get batch mutations
+  const updateBatchMutation = api.products.updateBatch.useMutation();
+  const createBatchMutation = api.products.createBatch.useMutation();
+  const deleteBatchMutation = api.products.deleteBatch.useMutation();
+
+  /**
+   * Delete Batch Handler
+   * Deletes a specific batch from a product
+   */
+  const handleDeleteBatch = async (batchId: string, productName: string) => {
+    if (!user) return;
+
+    // Check if this is the last batch
+    const product = selectedProductForBatches;
+    if (product && (product.batches ?? []).length === 1) {
+      toast({
+        title: "Cannot delete",
+        description: "Products must have at least one batch. Delete the product instead.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await deleteBatchMutation.mutateAsync({
+        userId: user.id,
+        batchId,
+      });
+
+      toast({
+        title: "Batch deleted",
+        description: `Batch removed from "${productName}"`,
+      });
+
+      // Refresh products
+      await refetchProducts();
+
+      // Update the selected product in the panel
+      if (product) {
+        const updatedProduct = products.find(p => p.id === product.id);
+        if (updatedProduct) {
+          setSelectedProductForBatches(updatedProduct);
+        } else {
+          // Product no longer exists, close panel
+          setSelectedProductForBatches(null);
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting batch:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete batch. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   /**
    * Submit Product Handler
    * Uses tRPC mutations for server-side validation and business logic
    * After mutation, refreshes data with refetchProducts()
    */
   const handleSubmitProduct = async (
-    productData: Omit<Product, "id" | "addedDate">,
+    productData: Omit<Product, "id" | "addedDate"> & {
+      allBatches?: Array<{ tempId: string; expiryDate: string; quantity: string | number; batchNumber: string }>;
+      deletedBatchIds?: string[];
+    },
   ) => {
     if (!user) return;
 
@@ -613,6 +676,51 @@ function ProductsPageContent() {
             barcode: productData.barcode,
           },
         });
+
+        // Delete removed batches first
+        if (productData.deletedBatchIds && productData.deletedBatchIds.length > 0) {
+          for (const batchId of productData.deletedBatchIds) {
+            await deleteBatchMutation.mutateAsync({
+              userId: user.id,
+              batchId,
+            });
+          }
+        }
+
+        // Handle all batches if provided (from ProductForm)
+        if (productData.allBatches && productData.allBatches.length > 0) {
+          const existingBatches = selectedProduct.batches ?? [];
+          const existingBatchIds = new Set(existingBatches.map(b => b.id));
+
+          // Process each batch
+          for (const batch of productData.allBatches) {
+            const isNewBatch = batch.tempId.startsWith('temp-');
+
+            if (isNewBatch) {
+              // Create new batch
+              await createBatchMutation.mutateAsync({
+                userId: user.id,
+                productId: selectedProduct.id,
+                batch: {
+                  expiryDate: batch.expiryDate,
+                  quantity: batch.quantity ? (typeof batch.quantity === "string" ? parseInt(batch.quantity, 10) : batch.quantity) : null,
+                  batchNumber: batch.batchNumber || undefined,
+                },
+              });
+            } else if (existingBatchIds.has(batch.tempId)) {
+              // Update existing batch
+              await updateBatchMutation.mutateAsync({
+                userId: user.id,
+                batchId: batch.tempId,
+                batch: {
+                  expiryDate: batch.expiryDate,
+                  quantity: batch.quantity ? (typeof batch.quantity === "string" ? parseInt(batch.quantity, 10) : batch.quantity) : null,
+                  batchNumber: batch.batchNumber || undefined,
+                },
+              });
+            }
+          }
+        }
 
         toast({
           title: "Product updated",
@@ -1434,14 +1542,20 @@ function ProductsPageContent() {
                               </h4>
                               <div className="flex shrink-0 gap-1">
                                 <button
-                                  onClick={() => handleEditProduct(product)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditProduct(product);
+                                  }}
                                   className="rounded p-1.5 text-gray-400 transition-colors hover:bg-[#059669]/10 hover:text-[#10B981]"
                                   title="Edit product"
                                 >
                                   <Edit2 className="h-3.5 w-3.5" />
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteClick(product)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteClick(product);
+                                  }}
                                   className="rounded p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
                                   title="Delete product"
                                 >
@@ -1487,7 +1601,7 @@ function ProductsPageContent() {
                                 );
                               })()}
                             </div>
-                            <div className="mt-2">
+                            <div className="mt-2 flex items-center gap-2">
                               {(() => {
                                 const earliestExpiryDate =
                                   getEarliestExpiryDate(product);
@@ -1495,6 +1609,19 @@ function ProductsPageContent() {
                                   ? getStatusBadge(earliestExpiryDate)
                                   : null;
                               })()}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedProductForBatches(product);
+                                }}
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                }}
+                                className="ml-auto flex items-center gap-1.5 rounded-lg bg-[#10B981] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#059669] active:bg-[#047857]"
+                              >
+                                <Package className="h-3.5 w-3.5" />
+                                View Batches
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -1641,7 +1768,16 @@ function ProductsPageContent() {
                             aria-label={`Select ${product.name}`}
                           />
                         </td>
-                        <td className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900">
+                        <td
+                          className="px-6 py-4 text-sm font-medium whitespace-nowrap text-gray-900 cursor-pointer hover:text-[#10B981]"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedProductForBatches(product);
+                          }}
+                          onMouseDown={(e) => {
+                            e.stopPropagation();
+                          }}
+                        >
                           {product.name}
                         </td>
                         <td className="px-6 py-4 text-sm whitespace-nowrap text-gray-500">
@@ -1780,7 +1916,7 @@ function ProductsPageContent() {
                               )}
                               <button
                                 onClick={() => setCurrentPage(page)}
-                                className={`min-w-[2.5rem] rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
+                                className={`min-w-10 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors ${
                                   currentPage === page
                                     ? "bg-[#059669] text-white"
                                     : "border border-gray-200 hover:bg-white"
@@ -1853,7 +1989,7 @@ function ProductsPageContent() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
               <div className="mb-4 flex items-start gap-4">
-                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100">
                   <AlertCircle className="h-6 w-6 text-red-600" />
                 </div>
                 <div className="flex-1">
@@ -2027,7 +2163,7 @@ function ProductsPageContent() {
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl">
               <div className="mb-4 flex items-start gap-4">
-                <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full bg-red-100">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-red-100">
                   <AlertCircle className="h-6 w-6 text-red-600" />
                 </div>
                 <div className="flex-1">
@@ -2067,6 +2203,142 @@ function ProductsPageContent() {
                     "Delete"
                   )}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Batch Details Slide-out Panel */}
+        {selectedProductForBatches && (
+          <div className="fixed inset-0 z-50 overflow-hidden">
+            {/* Backdrop */}
+            <div
+              className="absolute inset-0 bg-black/50 transition-opacity"
+              onClick={() => setSelectedProductForBatches(null)}
+            />
+
+            {/* Slide-out Panel */}
+            <div className="absolute top-0 right-0 bottom-0 flex">
+              <div className="ml-auto flex w-full max-w-md flex-col bg-white shadow-2xl">
+                {/* Header */}
+                <div className="border-b border-gray-200 px-6 py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Package className="h-6 w-6 text-[#10B981]" />
+                      <div>
+                        <h2 className="text-lg font-semibold text-gray-900">
+                          Batch Details
+                        </h2>
+                        <p className="text-sm text-gray-500">
+                          {selectedProductForBatches.name}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setSelectedProductForBatches(null)}
+                      className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                      aria-label="Close panel"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Batches List */}
+                <div className="flex-1 overflow-y-auto px-6 py-4">
+                  {(selectedProductForBatches.batches ?? []).length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-12 text-center">
+                      <Package className="mb-3 h-12 w-12 text-gray-300" />
+                      <p className="text-sm text-gray-500">
+                        No batches found for this product
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {(selectedProductForBatches.batches ?? []).map((batch, index) => {
+                        const daysUntilExpiry = getDaysUntilExpiry(batch.expiryDate);
+                        const isExpired = daysUntilExpiry < 0;
+                        const isExpiringSoon = daysUntilExpiry >= 0 && daysUntilExpiry <= 7;
+
+                        return (
+                          <div
+                            key={batch.id}
+                            className={`rounded-lg border p-4 ${
+                              isExpired
+                                ? 'border-red-200 bg-red-50'
+                                : isExpiringSoon
+                                  ? 'border-amber-200 bg-amber-50'
+                                  : 'border-gray-200 bg-white'
+                            }`}
+                          >
+                            <div className="mb-3 flex items-start justify-between">
+                              <div className="flex-1">
+                                <h3 className="text-sm font-semibold text-gray-900">
+                                  Batch #{index + 1}
+                                </h3>
+                                {batch.batchNumber && (
+                                  <p className="mt-0.5 text-xs text-gray-500">
+                                    {batch.batchNumber}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {getStatusBadge(batch.expiryDate)}
+                                <button
+                                  onClick={() => handleDeleteBatch(batch.id, selectedProductForBatches.name)}
+                                  className="p-1.5 text-gray-400 transition-colors hover:bg-red-100 hover:text-red-600 rounded"
+                                  title="Delete batch"
+                                  disabled={deleteBatchMutation.isPending}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="space-y-2 text-sm">
+                              <div className="flex items-center justify-between">
+                                <span className="text-gray-600">Expiry Date:</span>
+                                <span className="font-medium text-gray-900">
+                                  {formatDate(batch.expiryDate)}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-gray-600">Quantity:</span>
+                                <span className="font-medium text-gray-900">
+                                  {batch.quantity ?? 'N/A'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Summary */}
+                <div className="border-t border-gray-200 bg-gray-50 px-6 py-4">
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-700">Total Batches:</span>
+                      <span className="font-semibold text-gray-900">
+                        {(selectedProductForBatches.batches ?? []).length}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-700">Total Quantity:</span>
+                      <span className="font-semibold text-gray-900">
+                        {getTotalQuantity(selectedProductForBatches)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-gray-700">Category:</span>
+                      <span className="font-semibold text-gray-900">
+                        {selectedProductForBatches.category}
+                      </span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
