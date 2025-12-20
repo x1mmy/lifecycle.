@@ -100,6 +100,7 @@ const batchInputSchema = z.object({
 
 /**
  * Helper function to ensure a category exists in the categories table
+ * Optimized with upsert pattern - single query instead of SELECT then INSERT
  */
 async function ensureCategoryExists(
   userId: string,
@@ -112,35 +113,24 @@ async function ensureCategoryExists(
   const trimmedCategory = categoryName.trim();
 
   try {
-    const { data: existingCategory } = await supabaseAdmin
+    // Use upsert pattern: try to insert, ignore if already exists (ON CONFLICT DO NOTHING)
+    // This is much faster than SELECT then conditional INSERT
+    await supabaseAdmin
       .from("categories")
-      .select("id")
-      .eq("user_id", userId)
-      .eq("name", trimmedCategory)
-      .maybeSingle();
-
-    if (!existingCategory) {
-      const { error: createError } = await supabaseAdmin
-        .from("categories")
-        .insert({
+      .upsert(
+        {
           user_id: userId,
           name: trimmedCategory,
           description: null,
           updated_at: new Date().toISOString(),
-        });
-
-      if (createError && createError.code !== "23505") {
-        console.log(
-          `[Products] Failed to auto-create category "${trimmedCategory}":`,
-          createError.message,
-        );
-      } else if (!createError) {
-        console.log(
-          `[Products] Auto-created category "${trimmedCategory}" for user`,
-        );
-      }
-    }
+        },
+        {
+          onConflict: "user_id,name",
+          ignoreDuplicates: true,
+        }
+      );
   } catch (error) {
+    // Silently ignore errors - category sync is not critical
     console.log(
       `[Products] Category sync skipped for "${trimmedCategory}":`,
       error instanceof Error ? error.message : "Unknown error",
@@ -369,7 +359,8 @@ export const productsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
-        await ensureCategoryExists(input.userId, input.product.category);
+        // Update product immediately, sync category in background (non-blocking)
+        void ensureCategoryExists(input.userId, input.product.category);
 
         const { data, error } = await supabaseAdmin
           .from("products")
@@ -394,28 +385,30 @@ export const productsRouter = createTRPCRouter({
           });
         }
 
-        // Sync to barcode cache
+        // Sync to barcode cache in background (non-blocking)
         if (input.product.barcode && input.product.name) {
-          try {
-            await supabaseAdmin.from("barcode_cache").insert({
-              barcode: input.product.barcode.trim(),
-              name: input.product.name,
-              supplier: input.product.supplier ?? null,
-              category: input.product.category ?? null,
-            });
-          } catch {
-            // Ignore
-          }
+          const barcode = input.product.barcode;
+          const name = input.product.name;
+          const supplier = input.product.supplier;
+          const category = input.product.category;
+
+          void (async () => {
+            try {
+              await supabaseAdmin.from("barcode_cache").insert({
+                barcode: barcode.trim(),
+                name: name,
+                supplier: supplier ?? null,
+                category: category ?? null,
+              });
+            } catch {
+              // Ignore cache errors
+            }
+          })();
         }
 
-        // Fetch batches
-        const { data: batchesData } = await supabaseAdmin
-          .from("product_batches")
-          .select("*")
-          .eq("product_id", input.productId)
-          .order("expiry_date", { ascending: true });
-
-        return convertToProduct(data as ProductRow, (batchesData as ProductBatchRow[]) ?? []);
+        // Return immediately without fetching batches
+        // Frontend already has batch data and updates them separately
+        return convertToProduct(data as ProductRow, []);
       } catch (error) {
         console.error("[Products update Error]", error);
         if (error instanceof TRPCError) throw error;
