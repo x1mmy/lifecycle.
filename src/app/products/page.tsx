@@ -1560,30 +1560,27 @@ function ProductsPageContent() {
                               aria-label={`Select ${product.name}`}
                             />
                           </div>
-                          <div
-                            className="min-w-0 flex-1 cursor-pointer"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedProductForBatches(product);
-                            }}
-                            onMouseDown={(e) => {
-                              e.stopPropagation();
-                            }}
-                          >
+                          <div className="min-w-0 flex-1">
                             <div className="flex items-start justify-between gap-2">
                               <h4 className="truncate text-sm font-semibold text-gray-900">
                                 {product.name}
                               </h4>
                               <div className="flex shrink-0 gap-1">
                                 <button
-                                  onClick={() => handleEditProduct(product)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleEditProduct(product);
+                                  }}
                                   className="rounded p-1.5 text-gray-400 transition-colors hover:bg-[#059669]/10 hover:text-[#10B981]"
                                   title="Edit product"
                                 >
                                   <Edit2 className="h-3.5 w-3.5" />
                                 </button>
                                 <button
-                                  onClick={() => handleDeleteClick(product)}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteClick(product);
+                                  }}
                                   className="rounded p-1.5 text-gray-400 transition-colors hover:bg-red-50 hover:text-red-600"
                                   title="Delete product"
                                 >
@@ -1629,7 +1626,7 @@ function ProductsPageContent() {
                                 );
                               })()}
                             </div>
-                            <div className="mt-2">
+                            <div className="mt-2 flex items-center gap-2">
                               {(() => {
                                 const earliestExpiryDate =
                                   getEarliestExpiryDate(product);
@@ -1637,6 +1634,19 @@ function ProductsPageContent() {
                                   ? getStatusBadge(earliestExpiryDate)
                                   : null;
                               })()}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedProductForBatches(product);
+                                }}
+                                onMouseDown={(e) => {
+                                  e.stopPropagation();
+                                }}
+                                className="ml-auto flex items-center gap-1.5 rounded-lg bg-[#10B981] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[#059669] active:bg-[#047857]"
+                              >
+                                <Package className="h-3.5 w-3.5" />
+                                View Batches
+                              </button>
                             </div>
                           </div>
                         </div>
