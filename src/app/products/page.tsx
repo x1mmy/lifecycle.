@@ -614,6 +614,15 @@ function ProductsPageContent() {
     }
 
     try {
+      // Optimistically update the UI immediately
+      if (product) {
+        const updatedBatches = (product.batches ?? []).filter(b => b.id !== batchId);
+        setSelectedProductForBatches({
+          ...product,
+          batches: updatedBatches,
+        });
+      }
+
       await deleteBatchMutation.mutateAsync({
         userId: user.id,
         batchId,
@@ -624,19 +633,8 @@ function ProductsPageContent() {
         description: `Batch removed from "${productName}"`,
       });
 
-      // Refresh products
+      // Refresh products to sync with server
       await refetchProducts();
-
-      // Update the selected product in the panel
-      if (product) {
-        const updatedProduct = products.find(p => p.id === product.id);
-        if (updatedProduct) {
-          setSelectedProductForBatches(updatedProduct);
-        } else {
-          // Product no longer exists, close panel
-          setSelectedProductForBatches(null);
-        }
-      }
     } catch (error) {
       console.error("Error deleting batch:", error);
       toast({
@@ -644,6 +642,11 @@ function ProductsPageContent() {
         description: "Failed to delete batch. Please try again.",
         variant: "destructive",
       });
+
+      // Revert the optimistic update on error
+      if (product) {
+        setSelectedProductForBatches(product);
+      }
     }
   };
 
