@@ -758,7 +758,7 @@ function ProductsPageContent() {
           throw new Error("Expiry date is required for the first batch");
         }
 
-        await createProductMutation.mutateAsync({
+        const newProduct = await createProductMutation.mutateAsync({
           userId: user.id,
           product: {
             name: productData.name,
@@ -774,6 +774,24 @@ function ProductsPageContent() {
             batchNumber: productData.batchNumber,
           },
         });
+
+        // Handle additional batches if provided (from ProductForm)
+        if (productData.allBatches && productData.allBatches.length > 1) {
+          // Skip the first batch since it was already created above
+          const additionalBatches = productData.allBatches.slice(1);
+
+          for (const batch of additionalBatches) {
+            await createBatchMutation.mutateAsync({
+              userId: user.id,
+              productId: newProduct.id,
+              batch: {
+                expiryDate: batch.expiryDate,
+                quantity: batch.quantity ? (typeof batch.quantity === "string" ? parseInt(batch.quantity, 10) : batch.quantity) : null,
+                batchNumber: batch.batchNumber || undefined,
+              },
+            });
+          }
+        }
 
         toast({
           title: "Product added",
