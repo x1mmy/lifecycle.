@@ -4,8 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import { useDrag } from '@use-gesture/react';
 import type { Product } from '~/types';
 import { formatDate, getDaysUntilExpiry } from '~/utils/dateUtils';
-import { getEarliestExpiryDate } from '~/utils/batchHelpers';
-import { AlertTriangle, XCircle, Trash2, RefreshCw, Pencil } from 'lucide-react';
+import { getEarliestExpiryDate, getEarliestBatch } from '~/utils/batchHelpers';
+import { AlertTriangle, XCircle, Trash2, RefreshCw, Pencil, Loader2 } from 'lucide-react';
 import { useToast } from '~/hooks/use-toast';
 import { api } from '~/trpc/react';
 import { QuantityUpdateModal } from './QuantityUpdateModal';
@@ -22,6 +22,7 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showQuantityModal, setShowQuantityModal] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -132,11 +133,24 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
         {/* Edit button revealed on swipe right (mobile & tablet only) */}
         <div className="absolute left-0 top-0 bottom-0 w-24 bg-amber-500 flex items-center justify-center lg:hidden">
           <button
-            onClick={() => setShowQuantityModal(true)}
-            className="flex flex-col items-center justify-center text-white h-full w-full"
+            onClick={() => {
+              setIsUpdating(true);
+              setShowQuantityModal(true);
+            }}
+            disabled={isUpdating}
+            className="flex flex-col items-center justify-center text-white h-full w-full disabled:opacity-70"
           >
-            <Pencil className="h-5 w-5 mb-1" />
-            <span className="text-xs font-medium">Update</span>
+            {isUpdating ? (
+              <>
+                <Loader2 className="h-5 w-5 mb-1 animate-spin" />
+                <span className="text-xs font-medium">Updating</span>
+              </>
+            ) : (
+              <>
+                <Pencil className="h-5 w-5 mb-1" />
+                <span className="text-xs font-medium">Update</span>
+              </>
+            )}
           </button>
         </div>
 
@@ -185,11 +199,19 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
           <div className="hidden lg:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
             {/* Update Quantity Button */}
             <button
-              onClick={() => setShowQuantityModal(true)}
-              className="p-2 rounded-lg hover:bg-white/80 transition-colors text-gray-600 hover:text-[#10B981]"
+              onClick={() => {
+                setIsUpdating(true);
+                setShowQuantityModal(true);
+              }}
+              disabled={isUpdating}
+              className="p-2 rounded-lg hover:bg-white/80 transition-colors text-gray-600 hover:text-[#10B981] disabled:opacity-50 disabled:cursor-not-allowed"
               title="Update quantity"
             >
-              <RefreshCw className="h-4 w-4" />
+              {isUpdating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
             </button>
 
             {/* Remove Button */}
@@ -211,8 +233,14 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
         product={product}
         userId={userId}
         isOpen={showQuantityModal}
-        onClose={() => setShowQuantityModal(false)}
-        onUpdate={onProductDeleted}
+        onClose={() => {
+          setShowQuantityModal(false);
+          setIsUpdating(false);
+        }}
+        onUpdate={() => {
+          setIsUpdating(false);
+          onProductDeleted();
+        }}
       />
 
       {/* Delete Confirmation Dialog */}

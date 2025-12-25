@@ -1996,6 +1996,7 @@ function ProductsPageContent() {
             userId={user.id}
             onSubmit={handleSubmitProduct}
             onClose={handleCloseForm}
+            isSubmitting={createProductMutation.isPending || updateProductMutation.isPending}
           />
         )}
 
