@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { X, Barcode, Camera, Plus, Trash2 } from "lucide-react";
+import { X, Barcode, Camera, Plus, Trash2, Loader2 } from "lucide-react";
 import type { Product, ProductBatch } from "~/types";
 import { validateRequired, validatePositiveNumber } from "~/utils/validation";
 import { Button } from "~/components/ui/button";
@@ -23,6 +23,7 @@ interface ProductFormProps {
   userId: string;
   onSubmit: (product: Omit<Product, "id" | "addedDate">) => void;
   onClose: () => void;
+  isSubmitting?: boolean;
 }
 
 // Form data type (product details only)
@@ -48,10 +49,12 @@ const FORM_DRAFT_KEY = "product-form-draft";
 export const ProductForm = ({
   product,
   userId,
+  isSubmitting = false,
   onSubmit,
   onClose,
 }: ProductFormProps) => {
   const { toast } = useToast();
+  const [isProcessing, setIsProcessing] = useState(false);
 
   /**
    * Initialize product form data
@@ -321,6 +324,11 @@ export const ProductForm = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Prevent double submission
+    if (isSubmitting || isProcessing) {
+      return;
+    }
+
     // Validation - Product details
     const newErrors: Record<string, string> = {};
     const newBatchErrors: Record<string, string> = {};
@@ -391,6 +399,9 @@ export const ProductForm = ({
       allBatches: batches, // Pass all batches for proper handling
       deletedBatchIds: deletedBatchIds.length > 0 ? deletedBatchIds : undefined, // Pass deleted batch IDs
     };
+
+    // Set processing state to prevent double clicks
+    setIsProcessing(true);
 
     // Submit the form
     onSubmit(submitData);
@@ -731,10 +742,22 @@ export const ProductForm = ({
 
           {/* Actions */}
           <div className="flex gap-3 pt-6 mt-6 border-t border-gray-200">
-            <Button type="submit" className="flex-1">
-              {product ? "Update Product" : "Add Product"}
+            <Button
+              type="submit"
+              className="flex-1"
+              disabled={isSubmitting || isProcessing}
+              style={(isSubmitting || isProcessing) ? { pointerEvents: 'none' } : undefined}
+            >
+              {(isSubmitting || isProcessing) ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  {product ? "Updating..." : "Adding..."}
+                </>
+              ) : (
+                product ? "Update Product" : "Add Product"
+              )}
             </Button>
-            <Button type="button" variant="outline" onClick={handleClose}>
+            <Button type="button" variant="outline" onClick={handleClose} disabled={isSubmitting || isProcessing}>
               Cancel
             </Button>
           </div>
