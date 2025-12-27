@@ -173,6 +173,11 @@ export const productsRouter = createTRPCRouter({
    *
    * Retrieves all products for a specific user with their batches
    * Batches are sorted by expiry date (soonest first)
+   *
+   * Performance optimizations:
+   * - Uses single JOIN query instead of two separate queries
+   * - Leverages composite indexes for faster retrieval
+   * - Groups data in-memory efficiently
    */
   getAll: publicProcedure
     .input(
@@ -182,59 +187,72 @@ export const productsRouter = createTRPCRouter({
     )
     .query(async ({ input }) => {
       try {
-        // Fetch all products for the user
-        const { data: productsData, error: productsError } = await supabaseAdmin
+        // Single optimized query: JOIN products with batches
+        // This reduces round-trip time and leverages database JOIN optimization
+        const { data, error } = await supabaseAdmin
           .from("products")
-          .select("*")
+          .select(`
+            id,
+            user_id,
+            name,
+            category,
+            supplier,
+            location,
+            notes,
+            barcode,
+            added_date,
+            product_batches (
+              id,
+              product_id,
+              batch_number,
+              expiry_date,
+              quantity,
+              added_date,
+              created_at,
+              updated_at
+            )
+          `)
           .eq("user_id", input.userId)
-          .order("name", { ascending: true });
+          .order("name", { ascending: true })
+          .order("expiry_date", {
+            ascending: true,
+            referencedTable: "product_batches"
+          });
 
-        if (productsError) {
-          console.error("[Products getAll Error]", productsError);
+        if (error) {
+          console.error("[Products getAll Error]", error);
           throw new TRPCError({
             code: "INTERNAL_SERVER_ERROR",
             message: "Failed to fetch products",
           });
         }
 
-        const products = (productsData as ProductRow[]) ?? [];
-
-        if (products.length === 0) {
+        if (!data || data.length === 0) {
           return [];
         }
 
-        // Fetch all batches for these products
-        const productIds = products.map((p) => p.id);
-        const { data: batchesData, error: batchesError } = await supabaseAdmin
-          .from("product_batches")
-          .select("*")
-          .in("product_id", productIds)
-          .order("expiry_date", { ascending: true });
+        // Transform the nested data structure to our format
+        // product_batches comes as an array already sorted by expiry_date
+        return data.map((product) => {
+          const productRow = product as unknown as ProductRow & {
+            product_batches: ProductBatchRow[];
+          };
 
-        if (batchesError) {
-          console.error("[Batches getAll Error]", batchesError);
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to fetch batches",
-          });
-        }
-
-        const batches = (batchesData as ProductBatchRow[]) ?? [];
-
-        // Group batches by product_id
-        const batchesByProduct = batches.reduce(
-          (acc, batch) => {
-            acc[batch.product_id] ??= [];
-            acc[batch.product_id]!.push(batch);
-            return acc;
-          },
-          {} as Record<string, ProductBatchRow[]>,
-        );
-
-        // Combine products with their batches
-        return products.map((product) =>
-          convertToProduct(product, batchesByProduct[product.id] ?? []),
-        );
+          return convertToProduct(
+            {
+              id: productRow.id,
+              user_id: productRow.user_id,
+              name: productRow.name,
+              category: productRow.category,
+              supplier: productRow.supplier,
+              location: productRow.location,
+              notes: productRow.notes,
+              barcode: productRow.barcode,
+              added_date: productRow.added_date,
+            },
+            productRow.product_batches ?? []
+          );
+        });
       } catch (error) {
         console.error("[Products getAll Error]", error);
         throw new TRPCError({
