@@ -188,13 +188,11 @@
           scanner = new Html5Qrcode(scannerDivId, {
             verbose: false,
             formatsToSupport: [
+              // Only food product barcode formats for optimal performance
               Html5QrcodeSupportedFormats.EAN_13,
               Html5QrcodeSupportedFormats.EAN_8,
               Html5QrcodeSupportedFormats.UPC_A,
               Html5QrcodeSupportedFormats.UPC_E,
-              Html5QrcodeSupportedFormats.CODE_128,
-              Html5QrcodeSupportedFormats.CODE_39,
-              Html5QrcodeSupportedFormats.QR_CODE,
             ],
           });
 
@@ -219,11 +217,11 @@
           await scanner.start(
             cameraId, // Use specific camera ID instead of facingMode
             {
-              fps: 10, // REDUCED FPS for better focus and accuracy
+              fps: 25, // INCREASED FPS for faster detection (more scan attempts per second)
               qrbox: function(viewfinderWidth, viewfinderHeight) {
-                // LARGER scan box for better barcode capture
+                // OPTIMIZED scan box for faster processing while capturing food product barcodes
                 const minEdgeSize = Math.min(viewfinderWidth, viewfinderHeight);
-                const calculatedSize = Math.floor(minEdgeSize * 0.75); // Increased from 0.6 to 0.75
+                const calculatedSize = Math.floor(minEdgeSize * 0.65); // 65% is sufficient for EAN/UPC barcodes
                 // Ensure minimum size of 50px (library requirement)
                 const qrboxSize = Math.max(calculatedSize, 50);
                 return {
@@ -234,8 +232,8 @@
               aspectRatio: 1.777778, // 16:9 ratio better for mobile cameras
               disableFlip: false,
               videoConstraints: {
-                width: { ideal: 1920 }, // Request higher resolution for better barcode detection
-                height: { ideal: 1080 },
+                width: { ideal: 1280 }, // 720p resolution - optimal balance for mobile performance
+                height: { ideal: 720 },
                 facingMode: "environment",
               },
             },
