@@ -367,7 +367,13 @@ export default function DashboardPage() {
                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-3">
                       <AlertTriangle className="h-6 w-6 text-gray-400" />
               </div>
-                    <p className="text-sm">All good! No products expiring soon</p>
+                    <p className="text-sm">
+                      {totalProducts === 0
+                        ? 'Add products to start tracking expiration alerts'
+                        : totalProducts <= 2
+                          ? 'Add more products to get better visibility into upcoming expirations'
+                          : 'No products expiring within 7 days. Monitor this section for urgent items.'}
+                    </p>
               </div>
             )}
           </div>
@@ -433,7 +439,13 @@ export default function DashboardPage() {
                     <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-3">
                       <XCircle className="h-6 w-6 text-gray-400" />
                     </div>
-                    <p className="text-sm">Great! No expired products</p>
+                    <p className="text-sm">
+                      {totalProducts === 0
+                        ? 'Add products to track expiration dates'
+                        : totalProducts <= 2
+                          ? 'Continue adding products to monitor expiration status'
+                          : 'No expired products in your inventory'}
+                    </p>
                   </div>
                 )}
               </div>
@@ -489,7 +501,13 @@ export default function DashboardPage() {
                   <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gray-100 mb-3">
                     <Calendar className="h-6 w-6 text-gray-400" />
                   </div>
-                  <p className="text-sm">No products expiring in the next 30 days</p>
+                  <p className="text-sm">
+                    {totalProducts === 0
+                      ? 'Add products with expiry dates to see upcoming expirations here'
+                      : totalProducts <= 2
+                        ? 'Add more products to track upcoming expirations'
+                        : 'No products expiring in the next 30 days'}
+                  </p>
                 </div>
               )}
             </div>
