@@ -566,8 +566,11 @@ export default function DashboardPage() {
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
                     Start Tracking Today
                   </h3>
-                  <p className="text-sm text-gray-600 mb-6">
+                  <p className="text-sm text-gray-600 mb-3">
                     Add your first product to begin managing expiry dates and reduce waste.
+                  </p>
+                  <p className="text-xs text-gray-500 mb-6 max-w-md mx-auto">
+                    Add more products to start tracking expirations. Most shops add 20+ items in their first session.
                   </p>
                   <button
                     onClick={() => router.push('/products')}
