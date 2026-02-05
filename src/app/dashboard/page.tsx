@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Package, AlertTriangle, XCircle, Loader2, Plus, ArrowRight, TrendingUp, Calendar } from 'lucide-react';
 import { useSupabaseAuth } from '~/hooks/useSupabaseAuth';
-import type { Product } from '~/types';
 import { getDaysUntilExpiry } from '~/utils/dateUtils';
 import { getEarliestBatch, hasExpiredBatches, hasExpiringBatches } from '~/utils/batchHelpers';
 import { Header } from '~/components/layout/Header';
@@ -597,7 +596,7 @@ export default function DashboardPage() {
                       <div className="mb-6 max-w-md mx-auto">
                         <div className="mb-2">
                           <p className="text-xs text-gray-600" aria-live="polite">
-                            You're tracking {totalProducts} {totalProducts === 1 ? 'product' : 'products'}. Shops typically track 50–200 items.
+                            You&apos;re tracking {totalProducts} {totalProducts === 1 ? 'product' : 'products'}. Shops typically track 50–200 items.
                           </p>
                         </div>
                         {/* Minimal progress bar */}
