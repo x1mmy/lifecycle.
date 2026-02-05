@@ -557,28 +557,71 @@ export default function DashboardPage() {
             )}
 
             {/* Empty State CTA */}
-            {totalProducts === 0 && (
+            {totalProducts < 50 && (
               <div className="bg-gradient-to-br from-emerald-50 to-[#10B981]/10 rounded-lg shadow-sm border border-emerald-100 p-6">
                 <div className="text-center">
-                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#059669]/20 mb-4">
-                    <TrendingUp className="h-8 w-8 text-[#10B981]" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Start Tracking Today
-                  </h3>
-                  <p className="text-sm text-gray-600 mb-3">
-                    Add your first product to begin managing expiry dates and reduce waste.
-                  </p>
-                  <p className="text-xs text-gray-500 mb-6 max-w-md mx-auto">
-                    Add more products to start tracking expirations. Most shops add 20+ items in their first session.
-                  </p>
-                  <button
-                    onClick={() => router.push('/products')}
-                    className="px-6 py-3 bg-[#059669] text-white rounded-lg hover:bg-[#059669] transition-colors flex items-center gap-2 font-medium mx-auto"
-                  >
-                    <Plus className="h-5 w-5" />
-                    Add Your First Product
-                  </button>
+                  {totalProducts === 0 ? (
+                    <>
+                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#059669]/20 mb-4">
+                        <TrendingUp className="h-8 w-8 text-[#10B981]" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        Start Tracking Today
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-3">
+                        Add your first product to begin managing expiry dates and reduce waste.
+                      </p>
+                      <p className="text-xs text-gray-500 mb-6 max-w-md mx-auto">
+                        Add more products to start tracking expirations. Most shops add 20+ items in their first session.
+                      </p>
+                      <button
+                        onClick={() => router.push('/products')}
+                        className="px-6 py-3 bg-[#059669] text-white rounded-lg hover:bg-[#059669] transition-colors flex items-center gap-2 font-medium mx-auto"
+                      >
+                        <Plus className="h-5 w-5" />
+                        Add Your First Product
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#059669]/20 mb-4">
+                        <TrendingUp className="h-8 w-8 text-[#10B981]" />
+                      </div>
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                        Keep Building Your Inventory
+                      </h3>
+                      <p className="text-sm text-gray-600 mb-4">
+                        Add more products to begin managing expiry dates and reduce waste.
+                      </p>
+                      {/* Progress Indicator */}
+                      <div className="mb-6 max-w-md mx-auto">
+                        <div className="mb-2">
+                          <p className="text-xs text-gray-600" aria-live="polite">
+                            You're tracking {totalProducts} {totalProducts === 1 ? 'product' : 'products'}. Shops typically track 50–200 items.
+                          </p>
+                        </div>
+                        {/* Minimal progress bar */}
+                        <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-[#10B981] transition-all duration-300"
+                            style={{ width: `${Math.min((totalProducts / 50) * 100, 100)}%` }}
+                            role="progressbar"
+                            aria-valuenow={totalProducts}
+                            aria-valuemin={0}
+                            aria-valuemax={50}
+                            aria-label={`Progress: ${totalProducts} of 50 products`}
+                          />
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => router.push('/products')}
+                        className="px-6 py-3 bg-[#059669] text-white rounded-lg hover:bg-[#059669] transition-colors flex items-center gap-2 font-medium mx-auto"
+                      >
+                        <Plus className="h-5 w-5" />
+                        Add More Products
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )}
