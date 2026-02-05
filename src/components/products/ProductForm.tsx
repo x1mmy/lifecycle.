@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { X, Barcode, Camera, Plus, Trash2, Loader2 } from "lucide-react";
 import type { Product, ProductBatch } from "~/types";
 import { validateRequired, validatePositiveNumber } from "~/utils/validation";
@@ -24,6 +24,7 @@ interface ProductFormProps {
   onSubmit: (product: Omit<Product, "id" | "addedDate">) => void;
   onClose: () => void;
   isSubmitting?: boolean;
+  initialBarcode?: string;
 }
 
 // Form data type (product details only)
@@ -52,6 +53,7 @@ export const ProductForm = ({
   isSubmitting = false,
   onSubmit,
   onClose,
+  initialBarcode,
 }: ProductFormProps) => {
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
@@ -107,7 +109,7 @@ export const ProductForm = ({
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [batchErrors, setBatchErrors] = useState<Record<string, string>>({});
-  const [barcode, setBarcode] = useState<string>("");
+  const [barcode, setBarcode] = useState<string>(initialBarcode ?? "");
   const [isAddingNewCategory, setIsAddingNewCategory] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [deletedBatchIds, setDeletedBatchIds] = useState<string[]>([]); // Track deleted batch IDs
@@ -155,10 +157,19 @@ export const ProductForm = ({
 
   // Initialize barcode from product when editing
   useEffect(() => {
-    if (product?.barcode && typeof product.barcode === 'string') {
+    if (product?.barcode) {
       setBarcode(product.barcode);
     }
   }, [product]);
+
+  // Auto-lookup when opened with an initial barcode (from dashboard scan)
+  const hasAutoLookedUp = useRef(false);
+  useEffect(() => {
+    if (initialBarcode && !hasAutoLookedUp.current) {
+      hasAutoLookedUp.current = true;
+      void lookupBarcode(initialBarcode);
+    }
+  }, [initialBarcode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /**
    * Auto-save form draft to sessionStorage
