@@ -557,26 +557,26 @@ export default function DashboardPage() {
 
             {/* Empty State CTA */}
             {totalProducts < 50 && (
-              <div className="bg-gradient-to-br from-emerald-50 to-[#10B981]/10 rounded-lg shadow-sm border border-emerald-100 p-6">
+              <div className="bg-gradient-to-br from-emerald-50 to-[#10B981]/10 rounded-lg shadow-sm border border-emerald-100 p-4 sm:p-6 md:p-8 xl:p-10 xl:max-w-4xl xl:mx-auto">
                 <div className="text-center">
                   {totalProducts === 0 ? (
                     <>
-                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#059669]/20 mb-4">
-                        <TrendingUp className="h-8 w-8 text-[#10B981]" />
+                      <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[#059669]/20 mb-3 sm:mb-4">
+                        <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-[#10B981]" />
                       </div>
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      <h3 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-2">
                         Start Your Inventory Management Journey
                       </h3>
-                      <p className="text-sm text-gray-600 mb-4 max-w-md mx-auto">
+                      <p className="text-sm sm:text-base text-gray-600 mb-4 max-w-md mx-auto">
                         Track expiration dates, reduce waste, and stay compliant with automated alerts and monitoring.
                       </p>
                       {/* Benefits List */}
-                      <div className="mb-6 max-w-md mx-auto text-left space-y-2">
+                      <div className="mb-6 max-w-md lg:max-w-lg xl:max-w-xl mx-auto text-left space-y-2">
                         <div className="flex items-start gap-2">
                           <div className="mt-0.5 flex-shrink-0">
                             <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] mt-1.5" />
                           </div>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-xs sm:text-sm text-gray-600">
                             Get alerts before products expire
                           </p>
                         </div>
@@ -584,7 +584,7 @@ export default function DashboardPage() {
                           <div className="mt-0.5 flex-shrink-0">
                             <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] mt-1.5" />
                           </div>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-xs sm:text-sm text-gray-600">
                             Reduce waste and save money
                           </p>
                         </div>
@@ -592,14 +592,14 @@ export default function DashboardPage() {
                           <div className="mt-0.5 flex-shrink-0">
                             <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] mt-1.5" />
                           </div>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-xs sm:text-sm text-gray-600">
                             Maintain compliance with ease
                           </p>
                         </div>
                       </div>
                       <button
                         onClick={() => router.push('/products')}
-                        className="px-8 py-4 bg-[#059669] text-white rounded-lg hover:bg-[#047857] transition-all shadow-lg hover:shadow-xl flex items-center gap-2 font-semibold text-base mx-auto transform hover:scale-105"
+                        className="w-full sm:w-auto px-6 py-3 sm:px-8 sm:py-4 bg-[#059669] text-white rounded-lg hover:bg-[#047857] transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 font-semibold text-sm sm:text-base mx-auto transform hover:scale-105"
                       >
                         <Plus className="h-5 w-5" />
                         Start Adding Products
@@ -607,19 +607,19 @@ export default function DashboardPage() {
                     </>
                   ) : (
                     <>
-                      <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-[#059669]/20 mb-4">
-                        <TrendingUp className="h-8 w-8 text-[#10B981]" />
+                      <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-[#059669]/20 mb-3 sm:mb-4">
+                        <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-[#10B981]" />
                       </div>
-                      <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      <h3 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-2">
                         Keep Building Your Inventory
                       </h3>
-                      <p className="text-sm text-gray-600 mb-4 max-w-md mx-auto">
+                      <p className="text-sm sm:text-base text-gray-600 mb-4 max-w-md mx-auto">
                         The more products you track, the better protection you have against waste and compliance issues.
                       </p>
                       {/* Progress Indicator */}
-                      <div className="mb-6 max-w-md mx-auto">
+                      <div className="mb-6 max-w-md lg:max-w-lg xl:max-w-xl mx-auto">
                         <div className="mb-2">
-                          <p className="text-xs text-gray-600" aria-live="polite">
+                          <p className="text-xs sm:text-sm text-gray-600" aria-live="polite">
                             You&apos;re tracking {totalProducts} {totalProducts === 1 ? 'product' : 'products'}. Shops typically track 50–200 items.
                           </p>
                         </div>
@@ -637,12 +637,12 @@ export default function DashboardPage() {
                         </div>
                       </div>
                       {/* Benefits Reinforcement */}
-                      <div className="mb-6 max-w-md mx-auto text-left space-y-2">
+                      <div className="mb-6 max-w-md lg:max-w-lg xl:max-w-xl mx-auto text-left space-y-2">
                         <div className="flex items-start gap-2">
                           <div className="mt-0.5 flex-shrink-0">
                             <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] mt-1.5" />
                           </div>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-xs sm:text-sm text-gray-600">
                             More products mean better visibility into your inventory health
                           </p>
                         </div>
@@ -650,14 +650,14 @@ export default function DashboardPage() {
                           <div className="mt-0.5 flex-shrink-0">
                             <div className="w-1.5 h-1.5 rounded-full bg-[#10B981] mt-1.5" />
                           </div>
-                          <p className="text-sm text-gray-600">
+                          <p className="text-xs sm:text-sm text-gray-600">
                             Comprehensive tracking helps prevent costly waste
                           </p>
                         </div>
                       </div>
                       <button
                         onClick={() => router.push('/products')}
-                        className="px-8 py-4 bg-[#059669] text-white rounded-lg hover:bg-[#047857] transition-all shadow-lg hover:shadow-xl flex items-center gap-2 font-semibold text-base mx-auto transform hover:scale-105"
+                        className="w-full sm:w-auto px-6 py-3 sm:px-8 sm:py-4 bg-[#059669] text-white rounded-lg hover:bg-[#047857] transition-all shadow-lg hover:shadow-xl flex items-center justify-center gap-2 font-semibold text-sm sm:text-base mx-auto transform hover:scale-105"
                       >
                         <Plus className="h-5 w-5" />
                         Add More Products
