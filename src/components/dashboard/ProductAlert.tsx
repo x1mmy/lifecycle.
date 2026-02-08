@@ -2,10 +2,10 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useDrag } from '@use-gesture/react';
-import type { Product } from '~/types';
+import type { Product, ProductBatch } from '~/types';
 import { formatDate, getDaysUntilExpiry } from '~/utils/dateUtils';
-import { getEarliestExpiryDate, getEarliestBatch } from '~/utils/batchHelpers';
-import { AlertTriangle, XCircle, Trash2, RefreshCw, Pencil, Loader2 } from 'lucide-react';
+import { getEarliestExpiryDate, getEarliestBatch, getEarliestExpiringBatch } from '~/utils/batchHelpers';
+import { Trash2, Pencil, Loader2, CheckCircle2 } from 'lucide-react';
 import { useToast } from '~/hooks/use-toast';
 import { api } from '~/trpc/react';
 import { QuantityUpdateModal } from './QuantityUpdateModal';
@@ -59,17 +59,19 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
     };
   }, [swipeOffset, isMobile]);
 
-  const earliestExpiryDate = getEarliestExpiryDate(product);
+  const isExpired = type === 'expired';
+  // Urgent Attention: use the batch that is expiring soon (0–7 days), not the absolute earliest (which could be long-expired)
+  const earliestBatch: ProductBatch | undefined = isExpired
+    ? getEarliestBatch(product)
+    : getEarliestExpiringBatch(product, 7);
+  const earliestExpiryDate = earliestBatch?.expiryDate ?? (isExpired ? getEarliestExpiryDate(product) : undefined);
   const daysUntil = earliestExpiryDate ? getDaysUntilExpiry(earliestExpiryDate) : 0;
 
-  const isExpired = type === 'expired';
-  const Icon = isExpired ? XCircle : AlertTriangle;
-  const bgColor = isExpired ? 'bg-red-50' : 'bg-amber-50';
-  const textColor = isExpired ? 'text-red-600' : 'text-amber-600';
-  const borderColor = isExpired ? 'border-red-100' : 'border-amber-100';
+  // Target mockup: white cards with subtle borders; expired has left red accent
+  const cardBase = 'bg-white border border-gray-200';
+  const leftAccent = isExpired ? 'border-l-4 border-l-red-500' : '';
+  const urgencyTextColor = !isExpired && daysUntil <= 3 ? 'text-red-600' : !isExpired ? 'text-amber-600' : 'text-red-600';
 
-  // Get the earliest expiring batch (the one we want to delete)
-  const earliestBatch = getEarliestBatch(product);
   const isLastBatch = (product.batches ?? []).length === 1;
 
   // tRPC mutation for deleting product
@@ -201,65 +203,61 @@ export const ProductAlert = ({ product, type, userId, onProductDeleted }: Produc
           </button>
         </div>
 
-        {/* Main card content */}
+        {/* Main card content - white card, expired: left red accent; expiring: check button */}
         <div
           ref={cardRef}
           {...bind()}
-          className={`flex items-start gap-3 p-3 rounded-lg ${bgColor} border ${borderColor} relative group touch-pan-y lg:touch-auto transition-transform`}
+          className={`flex items-center gap-3 p-3 rounded-lg ${cardBase} ${leftAccent} relative group touch-pan-y lg:touch-auto transition-transform shadow-sm`}
           style={{
             transform: `translateX(${swipeOffset}px)`,
             transition: swipeOffset === 0 || Math.abs(swipeOffset) === 100 ? 'transform 0.3s ease-out' : 'none',
           }}
         >
-          <Icon className={`h-5 w-5 mt-0.5 shrink-0 ${textColor}`} />
-
           <div className="flex-1 min-w-0">
             <p className="font-medium text-gray-900">{product.name}</p>
-            <p className="text-sm text-gray-600">
-              {isExpired
-                ? `Expired ${Math.abs(daysUntil)} day${Math.abs(daysUntil) !== 1 ? 's' : ''} ago`
-                : `Expires in ${daysUntil} day${daysUntil !== 1 ? 's' : ''}`}
-              {earliestExpiryDate && (
-                <>
-                  {' '}
-                  ({formatDate(earliestExpiryDate)})
-                </>
-              )}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              {product.category} • Batches: {(product.batches ?? []).length}
+            <p className="text-xs text-gray-500 mt-0.5">
+              {earliestBatch?.batchNumber ? `Batch #${earliestBatch.batchNumber}` : 'Batch'}
+              {' · '}
+              Qty: {earliestBatch?.quantity ?? '—'}
+              {isExpired && ` · Expired ${Math.abs(daysUntil)} day${Math.abs(daysUntil) !== 1 ? 's' : ''} ago`}
             </p>
           </div>
 
-          {/* Desktop: Action Buttons (visible on hover) */}
-          <div className="hidden lg:flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {/* Update Quantity Button */}
-            <button
-              onClick={() => {
-                setIsUpdating(true);
-                setShowQuantityModal(true);
-              }}
-              disabled={isUpdating}
-              className="p-2 rounded-lg hover:bg-white/80 transition-colors text-gray-600 hover:text-[#10B981] disabled:opacity-50 disabled:cursor-not-allowed"
-              title="Update quantity"
-            >
-              {isUpdating ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-            </button>
+          {/* Expiring: urgency label on right + green check button */}
+          {!isExpired && (
+            <>
+              <span className={`text-sm font-medium shrink-0 ${urgencyTextColor}`}>
+                {daysUntil === 0 ? 'Today' : `${daysUntil} day${daysUntil !== 1 ? 's' : ''}`}
+              </span>
+              <button
+                onClick={() => {
+                  setIsUpdating(true);
+                  setShowQuantityModal(true);
+                }}
+                disabled={isUpdating}
+                className="p-2 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                title="Update quantity / mark handled"
+              >
+                {isUpdating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5" strokeWidth={2.25} />
+                )}
+              </button>
+            </>
+          )}
 
-            {/* Remove Button */}
+          {/* Expired: trash button only (desktop always visible to match mockup) */}
+          {isExpired && (
             <button
               onClick={() => setShowDeleteConfirm(true)}
-              className="p-2 rounded-lg hover:bg-white/80 transition-colors text-gray-600 hover:text-red-600"
+              className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-red-600 transition-colors shrink-0"
               title="Remove"
               disabled={deleteProduct.isPending}
             >
               <Trash2 className="h-4 w-4" />
             </button>
-          </div>
+          )}
 
         </div>
       </div>

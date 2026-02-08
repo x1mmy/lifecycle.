@@ -4,6 +4,7 @@
  */
 
 import type { Product, ProductBatch } from '~/types';
+import { getDaysUntilExpiry } from '~/utils/dateUtils';
 
 /**
  * Get the earliest expiring batch for a product
@@ -26,6 +27,32 @@ export function getEarliestBatch(product: Product): ProductBatch | undefined {
 export function getEarliestExpiryDate(product: Product): string | undefined {
   const batch = getEarliestBatch(product);
   return batch?.expiryDate;
+}
+
+/**
+ * Get the earliest batch that is in the expiring window (0 <= daysUntil <= threshold).
+ * Used for Urgent Attention so we show the batch expiring soon, not an already-expired batch.
+ */
+export function getEarliestExpiringBatch(
+  product: Product,
+  daysThreshold = 7,
+): ProductBatch | undefined {
+  if (!product.batches || product.batches.length === 0) {
+    return undefined;
+  }
+
+  const expiringBatches = product.batches.filter(batch => {
+    const daysUntil = getDaysUntilExpiry(batch.expiryDate);
+    return daysUntil >= 0 && daysUntil <= daysThreshold;
+  });
+
+  if (expiringBatches.length === 0) return undefined;
+
+  return expiringBatches.reduce((earliest, batch) => {
+    const earliestDate = new Date(earliest.expiryDate);
+    const batchDate = new Date(batch.expiryDate);
+    return batchDate < earliestDate ? batch : earliest;
+  });
 }
 
 /**
@@ -55,61 +82,54 @@ export function getAllBatches(products: Product[]): Array<ProductBatch & { produ
 }
 
 /**
- * Check if product has any expired batches
+ * Check if product has any expired batches.
+ * Uses date-only comparison: expired = strictly in the past (not today).
+ * Items expiring today (daysUntil === 0) are treated as expiring, not expired.
  */
 export function hasExpiredBatches(product: Product): boolean {
   if (!product.batches || product.batches.length === 0) {
     return false;
   }
 
-  const today = new Date();
-  return product.batches.some(batch => new Date(batch.expiryDate) < today);
+  return product.batches.some(batch => getDaysUntilExpiry(batch.expiryDate) < 0);
 }
 
 /**
- * Check if product has any expiring batches (within days threshold)
+ * Check if product has any expiring batches (within days threshold).
+ * Includes "expiring today" (daysUntil === 0) in Urgent Attention, not Expired.
  */
 export function hasExpiringBatches(product: Product, daysThreshold = 7): boolean {
   if (!product.batches || product.batches.length === 0) {
     return false;
   }
 
-  const today = new Date();
-  const thresholdDate = new Date();
-  thresholdDate.setDate(thresholdDate.getDate() + daysThreshold);
-
   return product.batches.some(batch => {
-    const expiryDate = new Date(batch.expiryDate);
-    return expiryDate >= today && expiryDate <= thresholdDate;
+    const daysUntil = getDaysUntilExpiry(batch.expiryDate);
+    return daysUntil >= 0 && daysUntil <= daysThreshold;
   });
 }
 
 /**
- * Get count of expired batches for a product
+ * Get count of expired batches for a product (date-only: expired = strictly before today).
  */
 export function getExpiredBatchCount(product: Product): number {
   if (!product.batches || product.batches.length === 0) {
     return 0;
   }
 
-  const today = new Date();
-  return product.batches.filter(batch => new Date(batch.expiryDate) < today).length;
+  return product.batches.filter(batch => getDaysUntilExpiry(batch.expiryDate) < 0).length;
 }
 
 /**
- * Get count of expiring batches for a product
+ * Get count of expiring batches for a product (includes today).
  */
 export function getExpiringBatchCount(product: Product, daysThreshold = 7): number {
   if (!product.batches || product.batches.length === 0) {
     return 0;
   }
 
-  const today = new Date();
-  const thresholdDate = new Date();
-  thresholdDate.setDate(thresholdDate.getDate() + daysThreshold);
-
   return product.batches.filter(batch => {
-    const expiryDate = new Date(batch.expiryDate);
-    return expiryDate >= today && expiryDate <= thresholdDate;
+    const daysUntil = getDaysUntilExpiry(batch.expiryDate);
+    return daysUntil >= 0 && daysUntil <= daysThreshold;
   }).length;
 }
