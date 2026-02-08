@@ -92,3 +92,23 @@ export interface AdminStats {
     totalProducts: number;
     usersWithActiveProducts: number;
 }
+
+// Admin Feedback Dashboard Types
+export interface AdminFeedback {
+    id: string;
+    user_id: string | null;
+    email: string | null;
+    type: string | null;
+    message: string;
+    created_at: string;
+    upvotes_count: number;
+    /** Joined from profiles when user_id is set */
+    business_name?: string;
+}
+
+export interface AdminFeedbackStats {
+    totalFeedback: number;
+    totalUpvotes: number;
+    topType: string | null;
+    feedbackThisWeek: number;
+}
