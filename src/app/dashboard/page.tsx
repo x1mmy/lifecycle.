@@ -13,6 +13,7 @@ import { ProductForm } from '~/components/products/ProductForm';
 import { BarcodeScanner } from '~/components/products/BarcodeScanner';
 import { useToast } from '~/hooks/use-toast';
 import { api } from '~/trpc/react';
+import type { Product } from '~/types';
 
 interface CategoryStat {
   category: string;
