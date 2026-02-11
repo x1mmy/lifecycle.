@@ -18,10 +18,27 @@ import { api } from "~/trpc/react";
 import { BarcodeScanner } from "./BarcodeScanner";
 import { formatDate } from "~/utils/dateUtils";
 
+// Data shape submitted by ProductForm for create/update operations
+export interface ProductFormSubmitData {
+  name: string;
+  category: string;
+  supplier?: string;
+  location?: string;
+  notes?: string;
+  barcode?: string;
+  // First batch fields (used when creating a new product)
+  expiryDate: string;
+  quantity: number | null;
+  batchNumber?: string;
+  // All batches (for multi-batch create/update)
+  allBatches?: BatchFormData[];
+  deletedBatchIds?: string[];
+}
+
 interface ProductFormProps {
   product?: Product;
   userId: string;
-  onSubmit: (product: Omit<Product, "id" | "addedDate">) => void;
+  onSubmit: (product: ProductFormSubmitData) => void;
   onClose: () => void;
   isSubmitting?: boolean;
   initialBarcode?: string;
@@ -397,7 +414,7 @@ export const ProductForm = ({
       return;
     }
 
-    const submitData: Omit<Product, "id" | "addedDate"> & { allBatches?: BatchFormData[]; deletedBatchIds?: string[] } = {
+    const submitData: ProductFormSubmitData = {
       name: formData.name,
       category: formData.category,
       expiryDate: firstBatch.expiryDate,
