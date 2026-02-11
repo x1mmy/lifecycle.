@@ -92,8 +92,8 @@ export default function SettingsPage() {
   interface CategoryProductSummary {
     id: string;
     name: string;
-    expiryDate: string;
-    quantity: number | null;
+    earliestExpiryDate: string | null;
+    totalQuantity: number | null;
   }
 
   // tRPC hooks for data fetching and mutations

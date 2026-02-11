@@ -15,12 +15,7 @@ export interface Product {
     notes?: string;
     barcode?: string;
     addedDate: string;
-    batches?: ProductBatch[]; // Batches associated with this product
-    // TEMPORARY: Old fields for backwards compatibility during migration (optional now)
-    // TODO: Remove these after products page is fully updated
-    expiryDate?: string;
-    quantity?: number | null;
-    batchNumber?: string;
+    batches?: ProductBatch[];
 }
 
 export interface ProductBatch {

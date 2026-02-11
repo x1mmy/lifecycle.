@@ -24,8 +24,8 @@ interface Category {
 interface CategoryProductSummary {
   id: string;
   name: string;
-  expiryDate: string;
-  quantity: number | null;
+  earliestExpiryDate: string | null;
+  totalQuantity: number | null;
 }
 
 interface CategoryModalProps {
@@ -406,10 +406,10 @@ export function CategoryModal({
                         <div className="flex-1">
                           <p className="font-medium">{product.name}</p>
                           <p className="text-xs text-gray-500">
-                            Expiry: {formatExpiryDate(product.expiryDate)}
+                            Expiry: {product.earliestExpiryDate ? formatExpiryDate(product.earliestExpiryDate) : "No batches"}
                           </p>
                           <p className="text-xs text-gray-500">
-                            Quantity: {product.quantity ?? "N/A"}
+                            Quantity: {product.totalQuantity ?? "N/A"}
                           </p>
                         </div>
                       </div>

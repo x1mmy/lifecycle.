@@ -9,7 +9,7 @@ import { getEarliestBatch, getTotalQuantity, hasExpiredBatches, hasExpiringBatch
 import { Header } from '~/components/layout/Header';
 import { StatCard } from '~/components/dashboard/StatCard';
 import { ProductAlert } from '~/components/dashboard/ProductAlert';
-import { ProductForm } from '~/components/products/ProductForm';
+import { ProductForm, type ProductFormSubmitData } from '~/components/products/ProductForm';
 import { BarcodeScanner } from '~/components/products/BarcodeScanner';
 import { useToast } from '~/hooks/use-toast';
 import { api } from '~/trpc/react';
@@ -164,9 +164,7 @@ export default function DashboardPage() {
    * Creates product with first batch, then additional batches
    */
   const handleSubmitProduct = async (
-    productData: Omit<Product, 'id' | 'addedDate'> & {
-      allBatches?: Array<{ tempId: string; expiryDate: string; quantity: string | number; batchNumber: string }>;
-    },
+    productData: ProductFormSubmitData,
   ) => {
     if (!user) return;
 

@@ -29,7 +29,7 @@ import { Checkbox } from "~/components/ui/checkbox";
 import { useSupabaseAuth } from "~/hooks/useSupabaseAuth";
 import type { Product } from "~/types";
 import { Header } from "~/components/layout/Header";
-import { ProductForm } from "~/components/products/ProductForm";
+import { ProductForm, type ProductFormSubmitData } from "~/components/products/ProductForm";
 import { getDaysUntilExpiry, formatDate } from "~/utils/dateUtils";
 import {
   getEarliestBatch,
@@ -38,46 +38,6 @@ import {
 } from "~/utils/batchHelpers";
 import { useToast } from "~/hooks/use-toast";
 import { api } from "~/trpc/react";
-
-/**
- * Database Product Row Type
- * Matches the backend API response from tRPC
- * Uses snake_case as it comes from Supabase
- */
-interface ProductRow {
-  id: string;
-  user_id: string;
-  name: string;
-  category: string;
-  expiry_date: string;
-  quantity: number;
-  batch_number?: string | null;
-  supplier?: string | null;
-  location?: string | null;
-  notes?: string | null;
-  barcode?: string | null;
-  added_date: string;
-}
-
-/**
- * Transform Database Row to Product Interface
- * Converts from snake_case (database) to camelCase (frontend)
- * Handles null values from database
- */
-const transformProductFromDb = (row: ProductRow): Product => ({
-  id: row.id,
-  name: row.name,
-  category: row.category,
-  supplier: row.supplier ?? undefined,
-  location: row.location ?? undefined,
-  notes: row.notes ?? undefined,
-  addedDate: row.added_date,
-  batches: [], // TODO: Products page needs batch architecture update
-  // TEMPORARY: These columns don't exist anymore after migration - page will not work
-  expiryDate: row.expiry_date ?? "2099-12-31", // Fake date
-  quantity: row.quantity ?? 0,
-  batchNumber: row.batch_number ?? undefined,
-});
 
 // Type definitions for product filtering, sorting, and pagination
 type FilterType = "all" | "expired" | "expiring-soon" | "good";
@@ -656,10 +616,7 @@ function ProductsPageContent() {
    * After mutation, refreshes data with refetchProducts()
    */
   const handleSubmitProduct = async (
-    productData: Omit<Product, "id" | "addedDate"> & {
-      allBatches?: Array<{ tempId: string; expiryDate: string; quantity: string | number; batchNumber: string }>;
-      deletedBatchIds?: string[];
-    },
+    productData: ProductFormSubmitData,
   ) => {
     if (!user) return;
 

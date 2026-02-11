@@ -50,8 +50,8 @@ interface SettingsRow {
 interface CategoryProductSummary {
   id: string;
   name: string;
-  expiryDate: string;
-  quantity: number | null;
+  earliestExpiryDate: string | null;
+  totalQuantity: number | null;
 }
 
 /**
@@ -704,10 +704,10 @@ export const settingsRouter = createTRPCRouter({
 
         const { data, error } = await supabaseAdmin
           .from("products")
-          .select("id, name, expiry_date, quantity")
+          .select("id, name, product_batches(expiry_date, quantity)")
           .eq("user_id", input.userId)
           .eq("category", category.name)
-          .order("expiry_date", { ascending: true });
+          .order("name", { ascending: true });
 
         if (error) {
           console.error("[Settings getCategoryProducts Error]", error);
@@ -717,20 +717,26 @@ export const settingsRouter = createTRPCRouter({
           });
         }
 
-        const products =
-          (
-            data as Array<{
-              id: string;
-              name: string;
+        const products: CategoryProductSummary[] =
+          (data ?? []).map((product) => {
+            const batches = (product.product_batches ?? []) as Array<{
               expiry_date: string;
               quantity: number | null;
-            }>
-          )?.map((product) => ({
-            id: product.id,
-            name: product.name,
-            expiryDate: product.expiry_date,
-            quantity: product.quantity,
-          })) ?? [];
+            }>;
+            const sortedDates = batches
+              .map((b) => b.expiry_date)
+              .sort();
+            const totalQty = batches.reduce(
+              (sum, b) => sum + (b.quantity ?? 0),
+              0,
+            );
+            return {
+              id: product.id,
+              name: product.name,
+              earliestExpiryDate: sortedDates[0] ?? null,
+              totalQuantity: batches.length > 0 ? totalQty : null,
+            };
+          });
 
         return {
           categoryName: category.name,
@@ -870,10 +876,10 @@ export const settingsRouter = createTRPCRouter({
         const { data: categoryProductsData, error: categoryProductsError } =
           await supabaseAdmin
             .from("products")
-            .select("id, name, expiry_date, quantity")
+            .select("id, name, product_batches(expiry_date, quantity)")
             .eq("user_id", input.userId)
             .eq("category", newCategoryName)
-            .order("expiry_date", { ascending: true });
+            .order("name", { ascending: true });
 
         if (categoryProductsError) {
           console.error(
@@ -883,19 +889,25 @@ export const settingsRouter = createTRPCRouter({
         }
 
         const products: CategoryProductSummary[] =
-          (
-            categoryProductsData as Array<{
-              id: string;
-              name: string;
+          (categoryProductsData ?? []).map((product) => {
+            const batches = (product.product_batches ?? []) as Array<{
               expiry_date: string;
               quantity: number | null;
-            }>
-          )?.map((product) => ({
-            id: product.id,
-            name: product.name,
-            expiryDate: product.expiry_date,
-            quantity: product.quantity,
-          })) ?? [];
+            }>;
+            const sortedDates = batches
+              .map((b) => b.expiry_date)
+              .sort();
+            const totalQty = batches.reduce(
+              (sum, b) => sum + (b.quantity ?? 0),
+              0,
+            );
+            return {
+              id: product.id,
+              name: product.name,
+              earliestExpiryDate: sortedDates[0] ?? null,
+              totalQuantity: batches.length > 0 ? totalQty : null,
+            };
+          });
 
         return {
           category: data,
