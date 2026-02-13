@@ -9,6 +9,16 @@ export const formatDate = (date: string | Date): string => {
     });
 };
 
+/** Australian format DD/MM/YYYY (e.g. 08/02/2025) */
+export const formatDateAU = (date: string | Date): string => {
+    const d = new Date(date);
+    return d.toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    });
+};
+
 export const getDaysUntilExpiry = (expiryDate: string): number => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);

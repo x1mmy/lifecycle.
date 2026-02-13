@@ -62,6 +62,7 @@ export const Header = () => {
         // Admin navigation
         { path: "/admin", label: "Admin Dashboard" },
         { path: "/admin/analytics", label: "Analytics" },
+        { path: "/admin/feedback", label: "Feedback" },
       ]
     : [
         // Regular user navigation
