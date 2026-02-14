@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Barcode, Camera, Plus, Trash2, Loader2 } from "lucide-react";
+import { X, Barcode, Camera, Plus, Trash2, Loader2, Lock } from "lucide-react";
 import type { Product, ProductBatch } from "~/types";
 import { validateRequired, validatePositiveNumber } from "~/utils/validation";
+import { useSubscription } from "~/hooks/useSubscription";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -56,6 +57,7 @@ export const ProductForm = ({
   initialBarcode,
 }: ProductFormProps) => {
   const { toast } = useToast();
+  const { canCameraScan, isFree, usage } = useSubscription();
   const [isProcessing, setIsProcessing] = useState(false);
 
   /**
@@ -189,6 +191,7 @@ export const ProductForm = ({
 
   // Use tRPC mutation for barcode lookup (server-side API call)
   const barcodeLookup = api.products.lookupBarcode.useMutation();
+  const recordScan = api.subscription.recordScan.useMutation();
 
   // Get existing categories for dropdown
   const { data: categories = [], isLoading: categoriesLoading, error: categoriesError } = api.products.getCategories.useQuery(
@@ -245,6 +248,7 @@ export const ProductForm = ({
       // Call server-side tRPC endpoint
       const result = await barcodeLookup.mutateAsync({
         barcode: barcodeValue.trim(),
+        userId,
       });
 
       // Check if product was found
@@ -321,6 +325,9 @@ export const ProductForm = ({
   const handleBarcodeScanned = (scannedBarcode: string) => {
     console.log("Barcode scanned from camera:", scannedBarcode);
     setBarcode(scannedBarcode);
+
+    // Record the scan for daily limit tracking
+    void recordScan.mutateAsync({ userId });
 
     // Automatically trigger lookup
     void lookupBarcode(scannedBarcode);
@@ -478,12 +485,28 @@ export const ProductForm = ({
               />
               <Button
                 type="button"
-                onClick={() => setIsScannerOpen(true)}
+                onClick={() => {
+                  if (!canCameraScan) {
+                    toast({
+                      title: "Camera scanning unavailable",
+                      description: isFree
+                        ? "Upgrade to Starter to use camera scanning."
+                        : `Daily scan limit reached (${usage.dailyScanLimit}/day).`,
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  setIsScannerOpen(true);
+                }}
                 variant="outline"
                 className="shrink-0"
-                title="Scan with camera"
+                title={canCameraScan ? "Scan with camera" : "Upgrade to scan with camera"}
               >
-                <Camera className="h-4 w-4" />
+                {canCameraScan ? (
+                  <Camera className="h-4 w-4" />
+                ) : (
+                  <Lock className="h-4 w-4" />
+                )}
               </Button>
               <Button
                 type="button"

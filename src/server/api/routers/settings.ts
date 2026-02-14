@@ -3,6 +3,22 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { supabaseAdmin } from "~/lib/supabase-admin";
 import { sendPasswordResetEmail } from "~/lib/email-service";
+import { getPlanConfig, type SubscriptionTier } from "~/lib/stripe";
+
+async function checkCustomCategoryAccess(userId: string): Promise<void> {
+  const { data: sub } = await supabaseAdmin
+    .from("subscriptions")
+    .select("tier")
+    .eq("user_id", userId)
+    .single();
+  const tier: SubscriptionTier = (sub?.tier as SubscriptionTier) ?? "free";
+  if (!getPlanConfig(tier).canCustomCategories) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Custom categories require a Starter or Professional plan.",
+    });
+  }
+}
 
 /**
  * Settings Router
@@ -597,6 +613,8 @@ export const settingsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
+        await checkCustomCategoryAccess(input.userId);
+
         const result = (await supabaseAdmin
           .from("categories")
           .insert({
@@ -775,6 +793,8 @@ export const settingsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
+        await checkCustomCategoryAccess(input.userId);
+
         // Step 1: Get the old category name before updating
         const { data: oldCategory } = await supabaseAdmin
           .from("categories")
@@ -929,6 +949,8 @@ export const settingsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
+        await checkCustomCategoryAccess(input.userId);
+
         // Step 1: Get the category name before deleting
         const { data: category } = await supabaseAdmin
           .from("categories")

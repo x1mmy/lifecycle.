@@ -37,6 +37,7 @@ import {
   getTotalQuantity,
 } from "~/utils/batchHelpers";
 import { useToast } from "~/hooks/use-toast";
+import { useSubscription } from "~/hooks/useSubscription";
 import { api } from "~/trpc/react";
 
 /**
@@ -89,6 +90,7 @@ function ProductsPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { toast } = useToast();
+  const { usage, canCreateProduct } = useSubscription();
 
   // Fetch products with batches using tRPC
   const {
@@ -564,6 +566,14 @@ function ProductsPageContent() {
 
   // Open form for adding new product
   const handleAddProduct = () => {
+    if (!canCreateProduct) {
+      toast({
+        title: "Product limit reached",
+        description: "Upgrade your plan to add more products.",
+        variant: "destructive",
+      });
+      return;
+    }
     setSelectedProduct(undefined); // Clear selection to indicate new product
     setIsFormOpen(true);
   };
@@ -1181,9 +1191,25 @@ function ProductsPageContent() {
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
           <h1 className="mb-2 text-3xl font-bold text-gray-900">Products</h1>
-          <p className="text-gray-500">
-            Manage your inventory and track expiration dates
-          </p>
+          <div className="flex items-center gap-4">
+            <p className="text-gray-500">
+              Manage your inventory and track expiration dates
+            </p>
+            <span className={`rounded-full px-3 py-1 text-xs font-medium ${
+              usage.productCount >= usage.productLimit
+                ? "bg-red-100 text-red-700"
+                : usage.productCount >= usage.productLimit * 0.9
+                  ? "bg-yellow-100 text-yellow-700"
+                  : "bg-gray-100 text-gray-600"
+            }`}>
+              {usage.productCount} / {usage.productLimit} products
+            </span>
+          </div>
+          {!canCreateProduct && (
+            <div className="mt-2 rounded-lg bg-red-50 border border-red-200 px-4 py-2 text-sm text-red-700">
+              Product limit reached. <a href="/pricing" className="font-medium underline">Upgrade your plan</a> to add more.
+            </div>
+          )}
         </div>
 
         {/* Actions Bar */}

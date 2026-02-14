@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Checkbox } from "~/components/ui/checkbox";
 import { useSupabaseAuth } from "~/hooks/useSupabaseAuth";
+import { useSubscription } from "~/hooks/useSubscription";
 import { Header } from "~/components/layout/Header";
 import { api } from "~/trpc/react";
 import { supabase } from "~/lib/supabase";
@@ -28,6 +29,8 @@ export default function SettingsPage() {
   const { user, loading, isAuthenticated } = useSupabaseAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const { tier, usage, features, isFree, cancelAtPeriodEnd, currentPeriodEnd } = useSubscription();
+  const createPortal = api.subscription.createPortalSession.useMutation();
 
   const [profileData, setProfileData] = useState({
     businessName: "",
@@ -1112,6 +1115,109 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+
+          {/* Subscription */}
+          <div className="rounded-lg border border-gray-100 bg-white p-6 shadow-sm">
+            <h2 className="mb-6 text-xl font-semibold text-gray-900">
+              Subscription
+            </h2>
+
+            <div className="space-y-4">
+              {/* Current Plan */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Current Plan</p>
+                  <p className="text-sm text-gray-500 capitalize">{tier}</p>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                  tier === "professional"
+                    ? "bg-purple-100 text-purple-700"
+                    : tier === "starter"
+                      ? "bg-blue-100 text-blue-700"
+                      : "bg-gray-100 text-gray-600"
+                }`}>
+                  {tier}
+                </span>
+              </div>
+
+              {/* Usage Meters */}
+              <div className="space-y-3 rounded-lg bg-gray-50 p-4">
+                <div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Products</span>
+                    <span className="font-medium text-gray-900">
+                      {usage.productCount} / {usage.productLimit}
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2 rounded-full bg-gray-200">
+                    <div
+                      className={`h-2 rounded-full transition-all ${
+                        usage.productCount >= usage.productLimit
+                          ? "bg-red-500"
+                          : usage.productCount >= usage.productLimit * 0.9
+                            ? "bg-yellow-500"
+                            : "bg-[#10B981]"
+                      }`}
+                      style={{
+                        width: `${Math.min((usage.productCount / usage.productLimit) * 100, 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {features.canCameraScan && (
+                  <div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Camera Scans Today</span>
+                      <span className="font-medium text-gray-900">
+                        {usage.dailyScanCount} / {usage.dailyScanLimit === Infinity ? "Unlimited" : usage.dailyScanLimit}
+                      </span>
+                    </div>
+                    {usage.dailyScanLimit !== Infinity && (
+                      <div className="mt-1 h-2 rounded-full bg-gray-200">
+                        <div
+                          className="h-2 rounded-full bg-[#10B981] transition-all"
+                          style={{
+                            width: `${Math.min((usage.dailyScanCount / usage.dailyScanLimit) * 100, 100)}%`,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Cancel notice */}
+              {cancelAtPeriodEnd && currentPeriodEnd && (
+                <div className="rounded-lg bg-yellow-50 border border-yellow-200 px-4 py-3 text-sm text-yellow-800">
+                  Your plan will downgrade to Free at the end of the current billing period ({new Date(currentPeriodEnd).toLocaleDateString()}).
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                {!isFree && (
+                  <button
+                    onClick={async () => {
+                      if (!user?.id) return;
+                      const result = await createPortal.mutateAsync({ userId: user.id });
+                      if (result.url) window.location.href = result.url;
+                    }}
+                    disabled={createPortal.isPending}
+                    className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                  >
+                    {createPortal.isPending ? "Loading..." : "Manage Billing"}
+                  </button>
+                )}
+                <a
+                  href="/pricing"
+                  className="rounded-lg bg-[#059669] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#047857]"
+                >
+                  {isFree ? "Upgrade Plan" : "Change Plan"}
+                </a>
+              </div>
+            </div>
+          </div>
 
           {/* Notification Preferences */}
           <div className="rounded-lg border border-gray-100 bg-white p-6 shadow-sm">

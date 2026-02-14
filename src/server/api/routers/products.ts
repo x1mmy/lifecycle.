@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { supabaseAdmin } from "~/lib/supabase-admin";
+import { getPlanConfig, type SubscriptionTier } from "~/lib/stripe";
 
 /**
  * Products Router - Batch Architecture
@@ -260,6 +261,25 @@ export const productsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
+        // Check product limit based on subscription tier
+        const { data: sub } = await supabaseAdmin
+          .from("subscriptions")
+          .select("tier")
+          .eq("user_id", input.userId)
+          .single();
+        const tier: SubscriptionTier = (sub?.tier as SubscriptionTier) ?? "free";
+        const plan = getPlanConfig(tier);
+        const { count: productCount } = await supabaseAdmin
+          .from("products")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", input.userId);
+        if ((productCount ?? 0) >= plan.productLimit) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `Product limit reached (${plan.productLimit}). Upgrade your plan to add more products.`,
+          });
+        }
+
         // Ensure category exists
         await ensureCategoryExists(input.userId, input.product.category);
 
@@ -315,6 +335,7 @@ export const productsRouter = createTRPCRouter({
         // Step 3: Save to barcode cache if applicable
         if (input.product.barcode && input.product.name) {
           try {
+            const isPro = tier === "professional";
             await supabaseAdmin
               .from("barcode_cache")
               .insert({
@@ -322,6 +343,9 @@ export const productsRouter = createTRPCRouter({
                 name: input.product.name,
                 supplier: input.product.supplier ?? null,
                 category: input.product.category ?? null,
+                submitted_by: input.userId,
+                is_verified: isPro,
+                priority_score: isPro ? 10 : 0,
               })
               .select()
               .single();
@@ -612,36 +636,50 @@ export const productsRouter = createTRPCRouter({
     .input(
       z.object({
         barcode: z.string().min(1, "Barcode is required"),
+        userId: z.string().uuid().optional(),
       }),
     )
     .mutation(async ({ input }) => {
       const barcode = input.barcode.trim();
 
-      // Check cache first
-      try {
-        const { data: cachedProduct, error: cacheError } = await supabaseAdmin
-          .from("barcode_cache")
-          .select("barcode, name, supplier, category")
-          .eq("barcode", barcode)
-          .maybeSingle();
+      // Check cache first (community DB - Starter+ only)
+      let hasCommunityAccess = false;
+      if (input.userId) {
+        const { data: sub } = await supabaseAdmin
+          .from("subscriptions")
+          .select("tier")
+          .eq("user_id", input.userId)
+          .single();
+        const userTier = (sub?.tier as SubscriptionTier) ?? "free";
+        hasCommunityAccess = getPlanConfig(userTier).canCommunityDb;
+      }
 
-        if (cachedProduct && !cacheError) {
-          console.log("✅ [Barcode Cache Hit]", barcode);
-          return {
-            found: true,
-            data: {
-              name: cachedProduct.name,
-              category: cachedProduct.category ?? null,
-              supplier: cachedProduct.supplier ?? null,
-            },
-            source: "cache",
-            message: "Product found in cache",
-          };
+      if (hasCommunityAccess) {
+        try {
+          const { data: cachedProduct, error: cacheError } = await supabaseAdmin
+            .from("barcode_cache")
+            .select("barcode, name, supplier, category")
+            .eq("barcode", barcode)
+            .maybeSingle();
+
+          if (cachedProduct && !cacheError) {
+            console.log("✅ [Barcode Cache Hit]", barcode);
+            return {
+              found: true,
+              data: {
+                name: cachedProduct.name,
+                category: cachedProduct.category ?? null,
+                supplier: cachedProduct.supplier ?? null,
+              },
+              source: "cache",
+              message: "Product found in cache",
+            };
+          }
+
+          console.log("⚠️ [Barcode Cache Miss]", barcode, "- trying API");
+        } catch (error) {
+          console.error("[Barcode Cache Error]", error);
         }
-
-        console.log("⚠️ [Barcode Cache Miss]", barcode, "- trying API");
-      } catch (error) {
-        console.error("[Barcode Cache Error]", error);
       }
 
       // Try Open Food Facts API

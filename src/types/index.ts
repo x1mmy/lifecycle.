@@ -92,3 +92,40 @@ export interface AdminStats {
     totalProducts: number;
     usersWithActiveProducts: number;
 }
+
+// Subscription Types
+export type SubscriptionTier = "free" | "starter" | "professional";
+export type SubscriptionStatus =
+    | "active"
+    | "past_due"
+    | "canceled"
+    | "incomplete"
+    | "incomplete_expired"
+    | "trialing"
+    | "unpaid"
+    | "paused";
+
+export interface Subscription {
+    userId: string;
+    stripeCustomerId: string | null;
+    stripeSubscriptionId: string | null;
+    tier: SubscriptionTier;
+    status: SubscriptionStatus;
+    currentPeriodStart: string | null;
+    currentPeriodEnd: string | null;
+    cancelAtPeriodEnd: boolean;
+}
+
+export interface SubscriptionUsage {
+    productCount: number;
+    productLimit: number;
+    dailyScanCount: number;
+    dailyScanLimit: number;
+}
+
+export interface SubscriptionFeatures {
+    canCameraScan: boolean;
+    canCustomCategories: boolean;
+    canCommunityDb: boolean;
+    canPrioritySupport: boolean;
+}
