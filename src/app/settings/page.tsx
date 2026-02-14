@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Loader2,
   ChevronDown,
@@ -1209,12 +1210,12 @@ export default function SettingsPage() {
                     {createPortal.isPending ? "Loading..." : "Manage Billing"}
                   </button>
                 )}
-                <a
+                <Link
                   href="/pricing"
                   className="rounded-lg bg-[#059669] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#047857]"
                 >
                   {isFree ? "Upgrade Plan" : "Change Plan"}
-                </a>
+                </Link>
               </div>
             </div>
           </div>

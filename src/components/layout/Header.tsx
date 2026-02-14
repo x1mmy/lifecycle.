@@ -69,7 +69,6 @@ export const Header = () => {
         // Regular user navigation
         { path: "/dashboard", label: "Dashboard" },
         { path: "/products", label: "Products" },
-        { path: "/pricing", label: "Pricing" },
         { path: "/settings", label: "Settings" },
         ...(isAdmin ? [{ path: "/admin", label: "Admin" }] : []),
       ];
