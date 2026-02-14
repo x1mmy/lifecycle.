@@ -5,6 +5,7 @@ import { supabaseAdmin } from "~/lib/supabase-admin";
 import {
   stripe,
   getPlanConfig,
+  getTierFromPriceId,
   type SubscriptionTier,
 } from "~/lib/stripe";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
@@ -144,6 +145,55 @@ export const subscriptionRouter = createTRPCRouter({
       });
 
       return { url: session.url };
+    }),
+
+  verifyCheckoutSession: publicProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        userId: z.string().uuid(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const session = await stripe.checkout.sessions.retrieve(input.sessionId);
+
+      if (session.payment_status !== "paid" || !session.subscription) {
+        return { success: false };
+      }
+
+      // Verify the session belongs to this user
+      if (session.metadata?.userId !== input.userId) {
+        return { success: false };
+      }
+
+      const subscription = await stripe.subscriptions.retrieve(
+        session.subscription as string,
+      );
+
+      const priceId = subscription.items.data[0]?.price.id;
+      if (!priceId) return { success: false };
+
+      const tier = getTierFromPriceId(priceId);
+
+      await supabaseAdmin.from("subscriptions").upsert(
+        {
+          user_id: input.userId,
+          stripe_customer_id: session.customer as string,
+          stripe_subscription_id: subscription.id,
+          tier,
+          status: subscription.status as string,
+          current_period_start: new Date(
+            subscription.start_date * 1000,
+          ).toISOString(),
+          current_period_end: subscription.cancel_at
+            ? new Date(subscription.cancel_at * 1000).toISOString()
+            : null,
+          cancel_at_period_end: subscription.cancel_at_period_end,
+        },
+        { onConflict: "user_id" },
+      );
+
+      return { success: true, tier };
     }),
 
   recordScan: publicProcedure

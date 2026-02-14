@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Loader2,
@@ -30,8 +30,10 @@ export default function SettingsPage() {
   const { user, loading, isAuthenticated } = useSupabaseAuth();
   const router = useRouter();
   const { toast } = useToast();
-  const { tier, usage, features, isFree, cancelAtPeriodEnd, currentPeriodEnd } = useSubscription();
+  const searchParams = useSearchParams();
+  const { tier, usage, features, isFree, cancelAtPeriodEnd, currentPeriodEnd, refetch } = useSubscription();
   const createPortal = api.subscription.createPortalSession.useMutation();
+  const verifyCheckout = api.subscription.verifyCheckoutSession.useMutation();
 
   const [profileData, setProfileData] = useState({
     businessName: "",
@@ -317,6 +319,33 @@ export default function SettingsPage() {
       router.push("/login");
     }
   }, [isAuthenticated, loading, router]);
+
+  // Verify checkout session on redirect from Stripe
+  useEffect(() => {
+    const sessionId = searchParams.get("session_id");
+    if (!sessionId || !user?.id || verifyCheckout.isPending) return;
+
+    verifyCheckout
+      .mutateAsync({ sessionId, userId: user.id })
+      .then((result) => {
+        if (result.success) {
+          toast({
+            title: "Subscription activated!",
+            description: `You're now on the ${result.tier} plan.`,
+            variant: "success",
+            action: <CheckCircle className="h-5 w-5 text-green-600" />,
+          });
+          void refetch();
+        }
+        // Clean up the URL
+        router.replace("/settings");
+      })
+      .catch(() => {
+        // Silently fail — webhook may have already handled it
+        router.replace("/settings");
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, searchParams]);
 
   // Load user data from tRPC queries
   useEffect(() => {
