@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -27,6 +27,14 @@ import { validateRequired, validateEmail } from "~/utils/validation";
 import { CategoryModal } from "~/components/settings/CategoryModal";
 
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>}>
+      <SettingsContent />
+    </Suspense>
+  );
+}
+
+function SettingsContent() {
   const { user, loading, isAuthenticated } = useSupabaseAuth();
   const router = useRouter();
   const { toast } = useToast();
