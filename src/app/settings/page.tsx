@@ -28,7 +28,16 @@ import { CategoryModal } from "~/components/settings/CategoryModal";
 
 export default function SettingsPage() {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-gray-400" /></div>}>
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gray-50">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-[#10B981]" />
+            <p className="text-gray-500">Loading...</p>
+          </div>
+        </div>
+      }
+    >
       <SettingsContent />
     </Suspense>
   );
