@@ -338,27 +338,27 @@ function SettingsContent() {
   }, [isAuthenticated, loading, router]);
 
   // Verify checkout session on redirect from Stripe
+  const hasVerified = useRef(false);
   useEffect(() => {
     const sessionId = searchParams.get("session_id");
-    if (!sessionId || !user?.id || verifyCheckout.isPending) return;
+    if (!sessionId || !user?.id || hasVerified.current) return;
+    hasVerified.current = true;
 
     verifyCheckout
       .mutateAsync({ sessionId, userId: user.id })
-      .then((result) => {
+      .then(async (result) => {
         if (result.success) {
+          await refetch();
           toast({
             title: "Subscription activated!",
             description: `You're now on the ${result.tier} plan.`,
             variant: "success",
             action: <CheckCircle className="h-5 w-5 text-green-600" />,
           });
-          void refetch();
         }
-        // Clean up the URL
         router.replace("/settings");
       })
       .catch(() => {
-        // Silently fail — webhook may have already handled it
         router.replace("/settings");
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
