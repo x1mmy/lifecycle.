@@ -534,6 +534,17 @@ export const settingsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ input }) => {
+      const DEFAULT_CATEGORIES = [
+        "Dairy",
+        "Meat & Seafood",
+        "Produce",
+        "Bakery",
+        "Beverages",
+        "Pantry",
+        "Frozen",
+        "Snacks",
+      ];
+
       try {
         await syncCategoriesFromProducts(input.userId);
 
@@ -575,7 +586,30 @@ export const settingsRouter = createTRPCRouter({
           });
         }
 
-        return data ?? [];
+        const dbCategories = data ?? [];
+
+        // Build virtual default entries (always present, read-only)
+        const defaultNamesLower = new Set(
+          DEFAULT_CATEGORIES.map((n) => n.toLowerCase()),
+        );
+        const now = new Date().toISOString();
+        const defaultEntries = DEFAULT_CATEGORIES.map((name) => ({
+          id: `default-${name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+          user_id: input.userId,
+          name,
+          description: null as string | null,
+          created_at: now,
+          updated_at: now,
+        }));
+
+        // Filter out any DB categories that share a name with a default
+        const customCategories = dbCategories.filter(
+          (c) => !defaultNamesLower.has(c.name.toLowerCase()),
+        );
+
+        return [...defaultEntries, ...customCategories].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        );
       } catch (error) {
         console.error("[Settings getCategories Error]", error);
         if (error instanceof TRPCError) throw error;
@@ -949,8 +983,6 @@ export const settingsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
-        await checkCustomCategoryAccess(input.userId);
-
         // Step 1: Get the category name before deleting
         const { data: category } = await supabaseAdmin
           .from("categories")

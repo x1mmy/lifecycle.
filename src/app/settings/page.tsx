@@ -993,18 +993,21 @@ function SettingsContent() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredCategories.map((category, index) => (
+                    {filteredCategories.map((category, index) => {
+                      const isDefault = category.id.startsWith("default-");
+                      return (
                       <tr
                         key={category.id}
                         className={`border-b border-gray-100 transition-colors hover:bg-gray-50 ${
                           selectedCategoryIds.has(category.id)
                             ? "bg-[#059669]/10"
                             : ""
-                        } ${isDraggingCategories ? "cursor-grabbing" : ""}${isDraggingCategories ? "select-none" : ""}`}
-                        onMouseDown={(e) => handleCategoryMouseDown(index, e)}
-                        onMouseEnter={() => handleCategoryMouseEnter(index)}
+                        } ${isDraggingCategories && !isDefault ? "cursor-grabbing" : ""}${isDraggingCategories && !isDefault ? "select-none" : ""}`}
+                        onMouseDown={(e) => !isDefault && handleCategoryMouseDown(index, e)}
+                        onMouseEnter={() => !isDefault && handleCategoryMouseEnter(index)}
                       >
                         <td className="w-12 px-4 py-4">
+                          {!isDefault && (
                           <Checkbox
                             checked={selectedCategoryIds.has(category.id)}
                             onCheckedChange={() =>
@@ -1023,20 +1026,27 @@ function SettingsContent() {
                             }}
                             aria-label={`Select ${category.name}`}
                           />
+                          )}
                         </td>
                         <td className="px-4 py-4">
-                          <div>
+                          <div className="flex items-center gap-2">
                             <p className="font-medium text-gray-900">
                               {category.name}
                             </p>
-                            {category.description && (
-                              <p className="mt-1 text-sm text-gray-500">
-                                {category.description}
-                              </p>
+                            {isDefault && (
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+                                Default
+                              </span>
                             )}
                           </div>
+                          {category.description && !isDefault && (
+                            <p className="mt-1 text-sm text-gray-500">
+                              {category.description}
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-4">
+                          {!isDefault && (
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() =>
@@ -1066,9 +1076,11 @@ function SettingsContent() {
                               <Trash2 className="h-4 w-4 sm:hidden" />
                             </button>
                           </div>
+                          )}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

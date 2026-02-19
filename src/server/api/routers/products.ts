@@ -728,6 +728,9 @@ export const productsRouter = createTRPCRouter({
 
   /**
    * Get All Categories
+   *
+   * Default categories are always included for all tiers.
+   * Paid users also get their custom categories merged in.
    */
   getCategories: publicProcedure
     .input(
@@ -736,7 +739,19 @@ export const productsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ input }) => {
+      const DEFAULT_CATEGORIES = [
+        "Dairy",
+        "Meat & Seafood",
+        "Produce",
+        "Bakery",
+        "Beverages",
+        "Pantry",
+        "Frozen",
+        "Snacks",
+      ];
+
       try {
+        // Get custom categories from the categories table
         const { data: categoriesData, error: categoriesError } =
           await supabaseAdmin
             .from("categories")
@@ -744,36 +759,36 @@ export const productsRouter = createTRPCRouter({
             .eq("user_id", input.userId)
             .order("name", { ascending: true });
 
-        if (!categoriesError && categoriesData && categoriesData.length > 0) {
-          return categoriesData.map((cat) => cat.name);
-        }
+        const customCategories =
+          !categoriesError && categoriesData
+            ? categoriesData.map((cat) => cat.name)
+            : [];
 
-        const { data, error } = await supabaseAdmin
+        // Also get categories from existing products (for legacy data)
+        const { data: productData } = await supabaseAdmin
           .from("products")
           .select("category")
           .eq("user_id", input.userId);
 
-        if (error) {
-          console.error("[Products getCategories Error]", error);
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to fetch categories",
-          });
-        }
+        const productCategories = productData
+          ? Array.from(
+              new Set(
+                (productData as Array<{ category: string }>)
+                  .map((p) => p.category)
+                  .filter(
+                    (c): c is string =>
+                      typeof c === "string" && c.trim() !== "" && c !== "-",
+                  ),
+              ),
+            )
+          : [];
 
-        const categories = data as Array<{ category: string }>;
-        const uniqueCategories = Array.from(
-          new Set(categories.map((product) => product.category)),
-        )
-          .filter(
-            (category): category is string =>
-              typeof category === "string" &&
-              category.trim() !== "" &&
-              category !== "-",
-          )
-          .sort();
+        // Merge all sources: defaults + custom + product categories
+        const allCategories = Array.from(
+          new Set([...DEFAULT_CATEGORIES, ...customCategories, ...productCategories]),
+        ).sort();
 
-        return uniqueCategories;
+        return allCategories;
       } catch (error) {
         console.error("[Products getCategories Error]", error);
         if (error instanceof TRPCError) throw error;

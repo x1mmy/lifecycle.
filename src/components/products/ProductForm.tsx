@@ -57,7 +57,7 @@ export const ProductForm = ({
   initialBarcode,
 }: ProductFormProps) => {
   const { toast } = useToast();
-  const { canCameraScan, isFree, usage } = useSubscription();
+  const { canCameraScan, canCustomCategories, isFree, usage } = useSubscription();
   const [isProcessing, setIsProcessing] = useState(false);
 
   /**
@@ -217,6 +217,14 @@ export const ProductForm = ({
 
   const handleChange = (field: string, value: string | number) => {
     if (field === "category" && value === "__new__") {
+      if (!canCustomCategories) {
+        toast({
+          title: "Upgrade required",
+          description: "Custom categories require a Starter or Professional plan.",
+          variant: "destructive",
+        });
+        return;
+      }
       setIsAddingNewCategory(true);
       setFormData({ ...formData, [field]: "" });
     } else {
@@ -584,9 +592,13 @@ export const ProductForm = ({
                     {/* Add new category option at the top */}
                     <SelectItem
                       value="__new__"
-                      className="font-medium text-[#10B981] hover:bg-[#10B981]/10 hover:text-[#059669]"
+                      className={`font-medium ${canCustomCategories ? "text-[#10B981] hover:bg-[#10B981]/10 hover:text-[#059669]" : "text-gray-400"}`}
                     >
-                      + Add new category
+                      {canCustomCategories ? "+ Add new category" : (
+                        <span className="flex items-center gap-1">
+                          <Lock className="h-3 w-3" /> Add new category (Starter+)
+                        </span>
+                      )}
                     </SelectItem>
 
                     {/* Separator */}
