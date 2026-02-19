@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Check, X as XIcon } from "lucide-react";
 import Link from "next/link";
 import { useSupabaseAuth } from "~/hooks/useSupabaseAuth";
@@ -8,6 +9,7 @@ import { useSubscription } from "~/hooks/useSubscription";
 import { api } from "~/trpc/react";
 import { Button } from "~/components/ui/button";
 import { Header } from "~/components/layout/Header";
+import { useToast } from "~/hooks/use-toast";
 
 const plans = [
   {
@@ -63,20 +65,35 @@ const plans = [
 export default function PricingPage() {
   const [billingInterval, setBillingInterval] = useState<"monthly" | "yearly">("monthly");
   const { user, isAuthenticated } = useSupabaseAuth();
-  const { tier: currentTier } = useSubscription();
+  const { tier: currentTier, refetch } = useSubscription();
   const createCheckout = api.subscription.createCheckoutSession.useMutation();
+  const router = useRouter();
+  const { toast } = useToast();
 
   const handleUpgrade = async (tier: "starter" | "professional") => {
     if (!user?.id) return;
 
-    const result = await createCheckout.mutateAsync({
-      userId: user.id,
-      tier,
-      interval: billingInterval,
-    });
+    try {
+      const result = await createCheckout.mutateAsync({
+        userId: user.id,
+        tier,
+        interval: billingInterval,
+      });
 
-    if (result.url) {
-      window.location.href = result.url;
+      if (result.updated) {
+        // Plan was changed instantly via proration (existing subscriber)
+        await refetch();
+        toast({
+          title: "Plan updated!",
+          description: `You're now on the ${result.tier ?? tier} plan. Proration applied.`,
+        });
+        router.push("/settings");
+      } else if (result.url) {
+        // New subscriber — redirect to Stripe checkout
+        window.location.href = result.url;
+      }
+    } catch (error) {
+      console.error("Checkout error:", error);
     }
   };
 

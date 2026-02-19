@@ -71,56 +71,114 @@ export const subscriptionRouter = createTRPCRouter({
       }),
     )
     .mutation(async ({ input }) => {
-      const plan = getPlanConfig(input.tier);
-      const priceId = plan.stripePriceIds[input.interval];
+      try {
+        const plan = getPlanConfig(input.tier);
+        const priceId = plan.stripePriceIds[input.interval];
 
-      if (!priceId) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Invalid plan configuration",
-        });
-      }
+        console.log("[createCheckout] tier:", input.tier, "interval:", input.interval, "priceId:", priceId);
 
-      // Get or create Stripe customer
-      const { data: sub } = await supabaseAdmin
-        .from("subscriptions")
-        .select("stripe_customer_id")
-        .eq("user_id", input.userId)
-        .single();
+        if (!priceId) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message: "Invalid plan configuration",
+          });
+        }
 
-      let customerId = sub?.stripe_customer_id;
+        // Check for existing subscription
+        const { data: sub } = await supabaseAdmin
+          .from("subscriptions")
+          .select("stripe_customer_id, stripe_subscription_id")
+          .eq("user_id", input.userId)
+          .maybeSingle();
 
-      if (!customerId) {
-        // Get user email for Stripe customer
-        const { data: profile } = await supabaseAdmin
-          .from("profiles")
-          .select("email")
-          .eq("id", input.userId)
-          .single();
+        let customerId = sub?.stripe_customer_id;
+        console.log("[createCheckout] existing customerId:", customerId, "existing subId:", sub?.stripe_subscription_id);
 
-        const customer = await stripe.customers.create({
-          email: profile?.email,
+        // If user already has an active Stripe subscription, update it with proration
+        if (customerId && sub?.stripe_subscription_id) {
+          try {
+            const existingSub = await stripe.subscriptions.retrieve(sub.stripe_subscription_id);
+
+            if (existingSub.status === "active" || existingSub.status === "trialing") {
+              const itemId = existingSub.items.data[0]?.id;
+              if (itemId) {
+                // Update the subscription in place — Stripe handles proration automatically
+                const updatedSub = await stripe.subscriptions.update(sub.stripe_subscription_id, {
+                  items: [{ id: itemId, price: priceId }],
+                  proration_behavior: "create_prorations",
+                });
+
+                const newPriceId = updatedSub.items.data[0]?.price.id;
+                const newTier = newPriceId ? getTierFromPriceId(newPriceId) : input.tier;
+
+                // Update database
+                await supabaseAdmin
+                  .from("subscriptions")
+                  .update({
+                    tier: newTier,
+                    status: updatedSub.status as string,
+                  })
+                  .eq("user_id", input.userId);
+
+                console.log("[createCheckout] updated existing subscription to", newTier);
+
+                // Return null url to signal the pricing page that the change was instant
+                return { url: null, updated: true, tier: newTier };
+              }
+            }
+          } catch (err) {
+            // Existing subscription may be invalid/cancelled — fall through to new checkout
+            console.error("[createCheckout] Failed to update existing sub, creating new checkout:", err);
+          }
+        }
+
+        // No existing subscription — create new checkout session
+        if (!customerId) {
+          const { data: profile } = await supabaseAdmin
+            .from("profiles")
+            .select("email")
+            .eq("id", input.userId)
+            .single();
+
+          const customer = await stripe.customers.create({
+            email: profile?.email,
+            metadata: { userId: input.userId },
+          });
+          customerId = customer.id;
+          console.log("[createCheckout] created new customer:", customerId);
+
+          await supabaseAdmin
+            .from("subscriptions")
+            .upsert(
+              {
+                user_id: input.userId,
+                stripe_customer_id: customerId,
+                tier: "free",
+                status: "active",
+              },
+              { onConflict: "user_id" },
+            );
+        }
+
+        const session = await stripe.checkout.sessions.create({
+          customer: customerId,
+          mode: "subscription",
+          line_items: [{ price: priceId, quantity: 1 }],
+          success_url: `${APP_URL}/settings?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: `${APP_URL}/pricing`,
           metadata: { userId: input.userId },
         });
-        customerId = customer.id;
 
-        await supabaseAdmin
-          .from("subscriptions")
-          .update({ stripe_customer_id: customerId })
-          .eq("user_id", input.userId);
+        console.log("[createCheckout] session created, url:", session.url);
+
+        return { url: session.url, updated: false, tier: null };
+      } catch (error) {
+        console.error("[createCheckout] Error:", error);
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: error instanceof Error ? error.message : "Failed to create checkout session",
+        });
       }
-
-      const session = await stripe.checkout.sessions.create({
-        customer: customerId,
-        mode: "subscription",
-        payment_method_types: ["card"],
-        line_items: [{ price: priceId, quantity: 1 }],
-        success_url: `${APP_URL}/settings?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${APP_URL}/pricing`,
-        metadata: { userId: input.userId },
-      });
-
-      return { url: session.url };
     }),
 
   createPortalSession: publicProcedure
@@ -166,9 +224,28 @@ export const subscriptionRouter = createTRPCRouter({
         return { success: false };
       }
 
-      const subscription = await stripe.subscriptions.retrieve(
-        session.subscription as string,
-      );
+      const newSubscriptionId = session.subscription as string;
+
+      // Cancel any existing subscription before activating the new one
+      const { data: existingSub } = await supabaseAdmin
+        .from("subscriptions")
+        .select("stripe_subscription_id")
+        .eq("user_id", input.userId)
+        .single();
+
+      if (
+        existingSub?.stripe_subscription_id &&
+        existingSub.stripe_subscription_id !== newSubscriptionId
+      ) {
+        try {
+          await stripe.subscriptions.cancel(existingSub.stripe_subscription_id);
+        } catch (err) {
+          // Old subscription may already be cancelled — continue
+          console.error("[verifyCheckout] Failed to cancel old subscription:", err);
+        }
+      }
+
+      const subscription = await stripe.subscriptions.retrieve(newSubscriptionId);
 
       const priceId = subscription.items.data[0]?.price.id;
       if (!priceId) return { success: false };
