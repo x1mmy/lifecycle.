@@ -50,6 +50,7 @@ function SettingsContent() {
   const searchParams = useSearchParams();
   const { tier, usage, features, isFree, cancelAtPeriodEnd, currentPeriodEnd, refetch } = useSubscription();
   const createPortal = api.subscription.createPortalSession.useMutation();
+  const cancelSub = api.subscription.cancelSubscription.useMutation();
   const verifyCheckout = api.subscription.verifyCheckoutSession.useMutation();
 
   const [profileData, setProfileData] = useState({
@@ -1256,17 +1257,48 @@ function SettingsContent() {
               {/* Actions */}
               <div className="flex gap-3">
                 {!isFree && (
-                  <button
-                    onClick={async () => {
-                      if (!user?.id) return;
-                      const result = await createPortal.mutateAsync({ userId: user.id });
-                      if (result.url) window.location.href = result.url;
-                    }}
-                    disabled={createPortal.isPending}
-                    className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
-                  >
-                    {createPortal.isPending ? "Loading..." : "Manage Billing"}
-                  </button>
+                  <>
+                    <button
+                      onClick={async () => {
+                        if (!user?.id) return;
+                        const result = await createPortal.mutateAsync({ userId: user.id });
+                        if (result.url) window.location.href = result.url;
+                      }}
+                      disabled={createPortal.isPending}
+                      className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                    >
+                      {createPortal.isPending ? "Loading..." : "Manage Billing"}
+                    </button>
+                    {!cancelAtPeriodEnd && (
+                      <button
+                        onClick={async () => {
+                          if (!user?.id) return;
+                          if (!confirm("Are you sure you want to cancel? Your plan will remain active until the end of the billing period.")) return;
+                          try {
+                            const result = await cancelSub.mutateAsync({ userId: user.id, immediate: false });
+                            if (result.status === "cancel_scheduled") {
+                              toast({
+                                title: "Subscription cancelled",
+                                description: "Your plan will downgrade to Free at the end of the billing period.",
+                              });
+                              await refetch();
+                            }
+                          } catch (error) {
+                            console.error("Cancel error:", error);
+                            toast({
+                              title: "Failed to cancel",
+                              description: "Something went wrong. Please try again.",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        disabled={cancelSub.isPending}
+                        className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                      >
+                        {cancelSub.isPending ? "Cancelling..." : "Cancel Plan"}
+                      </button>
+                    )}
+                  </>
                 )}
                 <Link
                   href="/pricing"

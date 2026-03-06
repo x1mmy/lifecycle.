@@ -181,6 +181,64 @@ export const subscriptionRouter = createTRPCRouter({
       }
     }),
 
+  cancelSubscription: publicProcedure
+    .input(
+      z.object({
+        userId: z.string().uuid(),
+        immediate: z.boolean().default(false),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const { data: sub } = await supabaseAdmin
+        .from("subscriptions")
+        .select("stripe_subscription_id")
+        .eq("user_id", input.userId)
+        .maybeSingle();
+
+      if (!sub?.stripe_subscription_id) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No active subscription found",
+        });
+      }
+
+      if (input.immediate) {
+        // Cancel immediately
+        await stripe.subscriptions.cancel(sub.stripe_subscription_id);
+
+        await supabaseAdmin
+          .from("subscriptions")
+          .update({
+            tier: "free",
+            status: "canceled",
+            stripe_subscription_id: null,
+            cancel_at_period_end: false,
+            current_period_start: null,
+            current_period_end: null,
+          })
+          .eq("user_id", input.userId);
+
+        return { status: "canceled" as const };
+      } else {
+        // Cancel at end of billing period
+        const updatedSub = await stripe.subscriptions.update(sub.stripe_subscription_id, {
+          cancel_at_period_end: true,
+        });
+
+        await supabaseAdmin
+          .from("subscriptions")
+          .update({
+            cancel_at_period_end: true,
+            current_period_end: updatedSub.cancel_at
+              ? new Date(updatedSub.cancel_at * 1000).toISOString()
+              : null,
+          })
+          .eq("user_id", input.userId);
+
+        return { status: "cancel_scheduled" as const };
+      }
+    }),
+
   createPortalSession: publicProcedure
     .input(z.object({ userId: z.string().uuid() }))
     .mutation(async ({ input }) => {
