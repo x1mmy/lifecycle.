@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import {
   Loader2,
   ChevronDown,
@@ -16,6 +17,7 @@ import {
 } from "lucide-react";
 import { Checkbox } from "~/components/ui/checkbox";
 import { useSupabaseAuth } from "~/hooks/useSupabaseAuth";
+import { useSubscription } from "~/hooks/useSubscription";
 import { Header } from "~/components/layout/Header";
 import { api } from "~/trpc/react";
 import { supabase } from "~/lib/supabase";
@@ -25,9 +27,31 @@ import { validateRequired, validateEmail } from "~/utils/validation";
 import { CategoryModal } from "~/components/settings/CategoryModal";
 
 export default function SettingsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen items-center justify-center bg-gray-50">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-[#10B981]" />
+            <p className="text-gray-500">Loading...</p>
+          </div>
+        </div>
+      }
+    >
+      <SettingsContent />
+    </Suspense>
+  );
+}
+
+function SettingsContent() {
   const { user, loading, isAuthenticated } = useSupabaseAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const { tier, usage, features, isFree, cancelAtPeriodEnd, currentPeriodEnd, refetch } = useSubscription();
+  const createPortal = api.subscription.createPortalSession.useMutation();
+  const cancelSub = api.subscription.cancelSubscription.useMutation();
+  const verifyCheckout = api.subscription.verifyCheckoutSession.useMutation();
 
   const [profileData, setProfileData] = useState({
     businessName: "",
@@ -313,6 +337,33 @@ export default function SettingsPage() {
       router.push("/login");
     }
   }, [isAuthenticated, loading, router]);
+
+  // Verify checkout session on redirect from Stripe
+  const hasVerified = useRef(false);
+  useEffect(() => {
+    const sessionId = searchParams.get("session_id");
+    if (!sessionId || !user?.id || hasVerified.current) return;
+    hasVerified.current = true;
+
+    verifyCheckout
+      .mutateAsync({ sessionId, userId: user.id })
+      .then(async (result) => {
+        if (result.success) {
+          await refetch();
+          toast({
+            title: "Subscription activated!",
+            description: `You're now on the ${result.tier} plan.`,
+            variant: "success",
+            action: <CheckCircle className="h-5 w-5 text-green-600" />,
+          });
+        }
+        router.replace("/settings");
+      })
+      .catch(() => {
+        router.replace("/settings");
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, searchParams]);
 
   // Load user data from tRPC queries
   useEffect(() => {
@@ -943,18 +994,21 @@ export default function SettingsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredCategories.map((category, index) => (
+                    {filteredCategories.map((category, index) => {
+                      const isDefault = category.id.startsWith("default-");
+                      return (
                       <tr
                         key={category.id}
                         className={`border-b border-gray-100 transition-colors hover:bg-gray-50 ${
                           selectedCategoryIds.has(category.id)
                             ? "bg-[#059669]/10"
                             : ""
-                        } ${isDraggingCategories ? "cursor-grabbing" : ""}${isDraggingCategories ? "select-none" : ""}`}
-                        onMouseDown={(e) => handleCategoryMouseDown(index, e)}
-                        onMouseEnter={() => handleCategoryMouseEnter(index)}
+                        } ${isDraggingCategories && !isDefault ? "cursor-grabbing" : ""}${isDraggingCategories && !isDefault ? "select-none" : ""}`}
+                        onMouseDown={(e) => !isDefault && handleCategoryMouseDown(index, e)}
+                        onMouseEnter={() => !isDefault && handleCategoryMouseEnter(index)}
                       >
                         <td className="w-12 px-4 py-4">
+                          {!isDefault && (
                           <Checkbox
                             checked={selectedCategoryIds.has(category.id)}
                             onCheckedChange={() =>
@@ -973,20 +1027,27 @@ export default function SettingsPage() {
                             }}
                             aria-label={`Select ${category.name}`}
                           />
+                          )}
                         </td>
                         <td className="px-4 py-4">
-                          <div>
+                          <div className="flex items-center gap-2">
                             <p className="font-medium text-gray-900">
                               {category.name}
                             </p>
-                            {category.description && (
-                              <p className="mt-1 text-sm text-gray-500">
-                                {category.description}
-                              </p>
+                            {isDefault && (
+                              <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-500">
+                                Default
+                              </span>
                             )}
                           </div>
+                          {category.description && !isDefault && (
+                            <p className="mt-1 text-sm text-gray-500">
+                              {category.description}
+                            </p>
+                          )}
                         </td>
                         <td className="px-4 py-4">
+                          {!isDefault && (
                           <div className="flex items-center justify-end gap-2">
                             <button
                               onClick={() =>
@@ -1016,9 +1077,11 @@ export default function SettingsPage() {
                               <Trash2 className="h-4 w-4 sm:hidden" />
                             </button>
                           </div>
+                          )}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -1112,6 +1175,140 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+
+          {/* Subscription */}
+          <div className="rounded-lg border border-gray-100 bg-white p-6 shadow-sm">
+            <h2 className="mb-6 text-xl font-semibold text-gray-900">
+              Subscription
+            </h2>
+
+            <div className="space-y-4">
+              {/* Current Plan */}
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Current Plan</p>
+                  <p className="text-sm text-gray-500 capitalize">{tier}</p>
+                </div>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold capitalize ${
+                  tier === "professional"
+                    ? "bg-purple-100 text-purple-700"
+                    : tier === "starter"
+                      ? "bg-blue-100 text-blue-700"
+                      : "bg-gray-100 text-gray-600"
+                }`}>
+                  {tier}
+                </span>
+              </div>
+
+              {/* Usage Meters */}
+              <div className="space-y-3 rounded-lg bg-gray-50 p-4">
+                <div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Products</span>
+                    <span className="font-medium text-gray-900">
+                      {usage.productCount} / {usage.productLimit}
+                    </span>
+                  </div>
+                  <div className="mt-1 h-2 rounded-full bg-gray-200">
+                    <div
+                      className={`h-2 rounded-full transition-all ${
+                        usage.productCount >= usage.productLimit
+                          ? "bg-red-500"
+                          : usage.productCount >= usage.productLimit * 0.9
+                            ? "bg-yellow-500"
+                            : "bg-[#10B981]"
+                      }`}
+                      style={{
+                        width: `${Math.min((usage.productCount / usage.productLimit) * 100, 100)}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {features.canCameraScan && (
+                  <div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-600">Camera Scans Today</span>
+                      <span className="font-medium text-gray-900">
+                        {usage.dailyScanCount} / {usage.dailyScanLimit === Infinity ? "Unlimited" : usage.dailyScanLimit}
+                      </span>
+                    </div>
+                    {usage.dailyScanLimit !== Infinity && (
+                      <div className="mt-1 h-2 rounded-full bg-gray-200">
+                        <div
+                          className="h-2 rounded-full bg-[#10B981] transition-all"
+                          style={{
+                            width: `${Math.min((usage.dailyScanCount / usage.dailyScanLimit) * 100, 100)}%`,
+                          }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Cancel notice */}
+              {cancelAtPeriodEnd && currentPeriodEnd && (
+                <div className="rounded-lg bg-yellow-50 border border-yellow-200 px-4 py-3 text-sm text-yellow-800">
+                  Your plan will downgrade to Free at the end of the current billing period ({new Date(currentPeriodEnd).toLocaleDateString()}).
+                </div>
+              )}
+
+              {/* Actions */}
+              <div className="flex gap-3">
+                {!isFree && (
+                  <>
+                    <button
+                      onClick={async () => {
+                        if (!user?.id) return;
+                        const result = await createPortal.mutateAsync({ userId: user.id });
+                        if (result.url) window.location.href = result.url;
+                      }}
+                      disabled={createPortal.isPending}
+                      className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50"
+                    >
+                      {createPortal.isPending ? "Loading..." : "Manage Billing"}
+                    </button>
+                    {!cancelAtPeriodEnd && (
+                      <button
+                        onClick={async () => {
+                          if (!user?.id) return;
+                          if (!confirm("Are you sure you want to cancel? Your plan will remain active until the end of the billing period.")) return;
+                          try {
+                            const result = await cancelSub.mutateAsync({ userId: user.id, immediate: false });
+                            if (result.status === "cancel_scheduled") {
+                              toast({
+                                title: "Subscription cancelled",
+                                description: "Your plan will downgrade to Free at the end of the billing period.",
+                              });
+                              await refetch();
+                            }
+                          } catch (error) {
+                            console.error("Cancel error:", error);
+                            toast({
+                              title: "Failed to cancel",
+                              description: "Something went wrong. Please try again.",
+                              variant: "destructive",
+                            });
+                          }
+                        }}
+                        disabled={cancelSub.isPending}
+                        className="rounded-lg border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50"
+                      >
+                        {cancelSub.isPending ? "Cancelling..." : "Cancel Plan"}
+                      </button>
+                    )}
+                  </>
+                )}
+                <Link
+                  href="/pricing"
+                  className="rounded-lg bg-[#059669] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#047857]"
+                >
+                  {isFree ? "Upgrade Plan" : "Change Plan"}
+                </Link>
+              </div>
+            </div>
+          </div>
 
           {/* Notification Preferences */}
           <div className="rounded-lg border border-gray-100 bg-white p-6 shadow-sm">

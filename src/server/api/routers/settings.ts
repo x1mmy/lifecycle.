@@ -3,6 +3,22 @@ import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { supabaseAdmin } from "~/lib/supabase-admin";
 import { sendPasswordResetEmail } from "~/lib/email-service";
+import { getPlanConfig, type SubscriptionTier } from "~/lib/stripe";
+
+async function checkCustomCategoryAccess(userId: string): Promise<void> {
+  const { data: sub } = await supabaseAdmin
+    .from("subscriptions")
+    .select("tier")
+    .eq("user_id", userId)
+    .single();
+  const tier: SubscriptionTier = (sub?.tier as SubscriptionTier) ?? "free";
+  if (!getPlanConfig(tier).canCustomCategories) {
+    throw new TRPCError({
+      code: "FORBIDDEN",
+      message: "Custom categories require a Starter or Professional plan.",
+    });
+  }
+}
 
 /**
  * Settings Router
@@ -518,6 +534,17 @@ export const settingsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ input }) => {
+      const DEFAULT_CATEGORIES = [
+        "Dairy",
+        "Meat & Seafood",
+        "Produce",
+        "Bakery",
+        "Beverages",
+        "Pantry",
+        "Frozen",
+        "Snacks",
+      ];
+
       try {
         await syncCategoriesFromProducts(input.userId);
 
@@ -559,7 +586,30 @@ export const settingsRouter = createTRPCRouter({
           });
         }
 
-        return data ?? [];
+        const dbCategories = data ?? [];
+
+        // Build virtual default entries (always present, read-only)
+        const defaultNamesLower = new Set(
+          DEFAULT_CATEGORIES.map((n) => n.toLowerCase()),
+        );
+        const now = new Date().toISOString();
+        const defaultEntries = DEFAULT_CATEGORIES.map((name) => ({
+          id: `default-${name.toLowerCase().replace(/[^a-z0-9]/g, "-")}`,
+          user_id: input.userId,
+          name,
+          description: null as string | null,
+          created_at: now,
+          updated_at: now,
+        }));
+
+        // Filter out any DB categories that share a name with a default
+        const customCategories = dbCategories.filter(
+          (c) => !defaultNamesLower.has(c.name.toLowerCase()),
+        );
+
+        return [...defaultEntries, ...customCategories].sort((a, b) =>
+          a.name.localeCompare(b.name),
+        );
       } catch (error) {
         console.error("[Settings getCategories Error]", error);
         if (error instanceof TRPCError) throw error;
@@ -597,6 +647,8 @@ export const settingsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
+        await checkCustomCategoryAccess(input.userId);
+
         const result = (await supabaseAdmin
           .from("categories")
           .insert({
@@ -781,6 +833,8 @@ export const settingsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
+        await checkCustomCategoryAccess(input.userId);
+
         // Step 1: Get the old category name before updating
         const { data: oldCategory } = await supabaseAdmin
           .from("categories")

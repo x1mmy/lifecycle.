@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { supabaseAdmin } from "~/lib/supabase-admin";
+import { getPlanConfig, type SubscriptionTier } from "~/lib/stripe";
 
 /**
  * Products Router - Batch Architecture
@@ -260,6 +261,25 @@ export const productsRouter = createTRPCRouter({
     )
     .mutation(async ({ input }) => {
       try {
+        // Check product limit based on subscription tier
+        const { data: sub } = await supabaseAdmin
+          .from("subscriptions")
+          .select("tier")
+          .eq("user_id", input.userId)
+          .single();
+        const tier: SubscriptionTier = (sub?.tier as SubscriptionTier) ?? "free";
+        const plan = getPlanConfig(tier);
+        const { count: productCount } = await supabaseAdmin
+          .from("products")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", input.userId);
+        if ((productCount ?? 0) >= plan.productLimit) {
+          throw new TRPCError({
+            code: "FORBIDDEN",
+            message: `Product limit reached (${plan.productLimit}). Upgrade your plan to add more products.`,
+          });
+        }
+
         // Ensure category exists
         await ensureCategoryExists(input.userId, input.product.category);
 
@@ -315,6 +335,7 @@ export const productsRouter = createTRPCRouter({
         // Step 3: Save to barcode cache if applicable
         if (input.product.barcode && input.product.name) {
           try {
+            const isPro = tier === "professional";
             await supabaseAdmin
               .from("barcode_cache")
               .insert({
@@ -322,6 +343,9 @@ export const productsRouter = createTRPCRouter({
                 name: input.product.name,
                 supplier: input.product.supplier ?? null,
                 category: input.product.category ?? null,
+                submitted_by: input.userId,
+                is_verified: isPro,
+                priority_score: isPro ? 10 : 0,
               })
               .select()
               .single();
@@ -612,36 +636,50 @@ export const productsRouter = createTRPCRouter({
     .input(
       z.object({
         barcode: z.string().min(1, "Barcode is required"),
+        userId: z.string().uuid().optional(),
       }),
     )
     .mutation(async ({ input }) => {
       const barcode = input.barcode.trim();
 
-      // Check cache first
-      try {
-        const { data: cachedProduct, error: cacheError } = await supabaseAdmin
-          .from("barcode_cache")
-          .select("barcode, name, supplier, category")
-          .eq("barcode", barcode)
-          .maybeSingle();
+      // Check cache first (community DB - Starter+ only)
+      let hasCommunityAccess = false;
+      if (input.userId) {
+        const { data: sub } = await supabaseAdmin
+          .from("subscriptions")
+          .select("tier")
+          .eq("user_id", input.userId)
+          .single();
+        const userTier = (sub?.tier as SubscriptionTier) ?? "free";
+        hasCommunityAccess = getPlanConfig(userTier).canCommunityDb;
+      }
 
-        if (cachedProduct && !cacheError) {
-          console.log("✅ [Barcode Cache Hit]", barcode);
-          return {
-            found: true,
-            data: {
-              name: cachedProduct.name,
-              category: cachedProduct.category ?? null,
-              supplier: cachedProduct.supplier ?? null,
-            },
-            source: "cache",
-            message: "Product found in cache",
-          };
+      if (hasCommunityAccess) {
+        try {
+          const { data: cachedProduct, error: cacheError } = await supabaseAdmin
+            .from("barcode_cache")
+            .select("barcode, name, supplier, category")
+            .eq("barcode", barcode)
+            .maybeSingle();
+
+          if (cachedProduct && !cacheError) {
+            console.log("✅ [Barcode Cache Hit]", barcode);
+            return {
+              found: true,
+              data: {
+                name: cachedProduct.name,
+                category: cachedProduct.category ?? null,
+                supplier: cachedProduct.supplier ?? null,
+              },
+              source: "cache",
+              message: "Product found in cache",
+            };
+          }
+
+          console.log("⚠️ [Barcode Cache Miss]", barcode, "- trying API");
+        } catch (error) {
+          console.error("[Barcode Cache Error]", error);
         }
-
-        console.log("⚠️ [Barcode Cache Miss]", barcode, "- trying API");
-      } catch (error) {
-        console.error("[Barcode Cache Error]", error);
       }
 
       // Try Open Food Facts API
@@ -690,6 +728,9 @@ export const productsRouter = createTRPCRouter({
 
   /**
    * Get All Categories
+   *
+   * Default categories are always included for all tiers.
+   * Paid users also get their custom categories merged in.
    */
   getCategories: publicProcedure
     .input(
@@ -698,7 +739,19 @@ export const productsRouter = createTRPCRouter({
       }),
     )
     .query(async ({ input }) => {
+      const DEFAULT_CATEGORIES = [
+        "Dairy",
+        "Meat & Seafood",
+        "Produce",
+        "Bakery",
+        "Beverages",
+        "Pantry",
+        "Frozen",
+        "Snacks",
+      ];
+
       try {
+        // Get custom categories from the categories table
         const { data: categoriesData, error: categoriesError } =
           await supabaseAdmin
             .from("categories")
@@ -706,36 +759,36 @@ export const productsRouter = createTRPCRouter({
             .eq("user_id", input.userId)
             .order("name", { ascending: true });
 
-        if (!categoriesError && categoriesData && categoriesData.length > 0) {
-          return categoriesData.map((cat) => cat.name);
-        }
+        const customCategories =
+          !categoriesError && categoriesData
+            ? categoriesData.map((cat) => cat.name)
+            : [];
 
-        const { data, error } = await supabaseAdmin
+        // Also get categories from existing products (for legacy data)
+        const { data: productData } = await supabaseAdmin
           .from("products")
           .select("category")
           .eq("user_id", input.userId);
 
-        if (error) {
-          console.error("[Products getCategories Error]", error);
-          throw new TRPCError({
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Failed to fetch categories",
-          });
-        }
+        const productCategories = productData
+          ? Array.from(
+              new Set(
+                (productData as Array<{ category: string }>)
+                  .map((p) => p.category)
+                  .filter(
+                    (c): c is string =>
+                      typeof c === "string" && c.trim() !== "" && c !== "-",
+                  ),
+              ),
+            )
+          : [];
 
-        const categories = data as Array<{ category: string }>;
-        const uniqueCategories = Array.from(
-          new Set(categories.map((product) => product.category)),
-        )
-          .filter(
-            (category): category is string =>
-              typeof category === "string" &&
-              category.trim() !== "" &&
-              category !== "-",
-          )
-          .sort();
+        // Merge all sources: defaults + custom + product categories
+        const allCategories = Array.from(
+          new Set([...DEFAULT_CATEGORIES, ...customCategories, ...productCategories]),
+        ).sort();
 
-        return uniqueCategories;
+        return allCategories;
       } catch (error) {
         console.error("[Products getCategories Error]", error);
         if (error instanceof TRPCError) throw error;

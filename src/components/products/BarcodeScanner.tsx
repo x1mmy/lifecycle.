@@ -34,6 +34,7 @@
     const scannerRef = useRef<Html5Qrcode | null>(null);
     const videoElementRef = useRef<HTMLVideoElement | null>(null); // NEW: Reference to video element for tap-to-focus
     const videoTrackRef = useRef<MediaStreamTrack | null>(null); // NEW: Reference to video track for focus control
+    const hasAcceptedScanRef = useRef(false);
     const scannerDivId = "barcode-scanner-reader";
 
     // Barcode validation function
@@ -155,6 +156,7 @@
         setError(null); // Reset error
         setBarcodeDetected(false); // NEW: Reset barcode detection state
         setIsProcessing(false); // NEW: Reset processing state
+        hasAcceptedScanRef.current = false;
         return;
       }
 
@@ -167,6 +169,7 @@
           setLastScannedCode(null);
           setIsScanning(true);
           setShowInstructions(true);
+          hasAcceptedScanRef.current = false;
 
           // Auto-hide instructions after 5 seconds
           setTimeout(() => {
@@ -238,6 +241,10 @@
               },
             },
             (decodedText) => {
+              if (hasAcceptedScanRef.current) {
+                return;
+              }
+
               // Success callback - barcode scanned!
               console.log("Barcode scanned (raw):", decodedText);
 
@@ -252,6 +259,7 @@
               if (validation.isValid) {
                 console.log(`✅ Valid ${validation.type} barcode accepted`);
                 setLastScannedCode(decodedText);
+                hasAcceptedScanRef.current = true;
 
                 // FIX: Add delay so user can see the "Barcode detected!" message
                 // This gives visual feedback before closing the dialog

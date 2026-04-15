@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Menu, X, LogOut, Package, User, ChevronRight } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useSupabaseAuth } from "~/hooks/useSupabaseAuth";
+import { useSubscription } from "~/hooks/useSubscription";
 import { Button } from "~/components/ui/button";
 
 export const Header = () => {
@@ -13,6 +14,7 @@ export const Header = () => {
   const pathname = usePathname();
   const router = useRouter();
   const { user, logout, isAdmin } = useSupabaseAuth();
+  const { tier, isFree } = useSubscription();
 
   const handleLogout = () => {
     void logout();
@@ -107,6 +109,15 @@ export const Header = () => {
 
           {/* Desktop User Menu */}
           <div className="hidden items-center gap-3 md:flex">
+            {!isFree && (
+              <span className={`rounded-full px-2 py-0.5 text-xs font-medium capitalize ${
+                tier === "professional"
+                  ? "bg-purple-100 text-purple-700"
+                  : "bg-blue-100 text-blue-700"
+              }`}>
+                {tier}
+              </span>
+            )}
             <div className="text-right">
               <p className="text-sm font-medium text-gray-900">
                 {user?.user_metadata?.business_name ??

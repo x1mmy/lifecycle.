@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from "react";
-import { X, Barcode, Camera, Plus, Trash2, Loader2 } from "lucide-react";
+import { X, Barcode, Camera, Plus, Trash2, Loader2, Lock } from "lucide-react";
 import type { Product, ProductBatch } from "~/types";
 import { validateRequired, validatePositiveNumber } from "~/utils/validation";
+import { useSubscription } from "~/hooks/useSubscription";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
@@ -63,6 +64,7 @@ interface BatchFormData {
 
 // Storage key for form draft (isolated per browser tab via sessionStorage)
 const FORM_DRAFT_KEY = "product-form-draft";
+const CAMERA_SCAN_DEDUPE_MS = 1500;
 
 export const ProductForm = ({
   product,
@@ -73,6 +75,7 @@ export const ProductForm = ({
   initialBarcode,
 }: ProductFormProps) => {
   const { toast } = useToast();
+  const { canCameraScan, canCustomCategories, isFree, usage } = useSubscription();
   const [isProcessing, setIsProcessing] = useState(false);
 
   /**
@@ -181,6 +184,10 @@ export const ProductForm = ({
 
   // Auto-lookup when opened with an initial barcode (from dashboard scan)
   const hasAutoLookedUp = useRef(false);
+  const isHandlingCameraScanRef = useRef(false);
+  const lastCameraScanRef = useRef<{ barcode: string; timestamp: number } | null>(
+    null,
+  );
   useEffect(() => {
     if (initialBarcode && !hasAutoLookedUp.current) {
       hasAutoLookedUp.current = true;
@@ -206,6 +213,7 @@ export const ProductForm = ({
 
   // Use tRPC mutation for barcode lookup (server-side API call)
   const barcodeLookup = api.products.lookupBarcode.useMutation();
+  const recordScan = api.subscription.recordScan.useMutation();
 
   // Get existing categories for dropdown
   const { data: categories = [], isLoading: categoriesLoading, error: categoriesError } = api.products.getCategories.useQuery(
@@ -231,6 +239,14 @@ export const ProductForm = ({
 
   const handleChange = (field: string, value: string | number) => {
     if (field === "category" && value === "__new__") {
+      if (!canCustomCategories) {
+        toast({
+          title: "Upgrade required",
+          description: "Custom categories require a Starter or Professional plan.",
+          variant: "destructive",
+        });
+        return;
+      }
       setIsAddingNewCategory(true);
       setFormData({ ...formData, [field]: "" });
     } else {
@@ -262,6 +278,7 @@ export const ProductForm = ({
       // Call server-side tRPC endpoint
       const result = await barcodeLookup.mutateAsync({
         barcode: barcodeValue.trim(),
+        userId,
       });
 
       // Check if product was found
@@ -336,17 +353,53 @@ export const ProductForm = ({
    * Auto-fills the barcode input and triggers lookup
    */
   const handleBarcodeScanned = (scannedBarcode: string) => {
-    console.log("Barcode scanned from camera:", scannedBarcode);
-    setBarcode(scannedBarcode);
+    const trimmedBarcode = scannedBarcode.trim();
+    const now = Date.now();
+    const lastScan = lastCameraScanRef.current;
+    const isRapidDuplicate =
+      lastScan &&
+      lastScan.barcode === trimmedBarcode &&
+      now - lastScan.timestamp < CAMERA_SCAN_DEDUPE_MS;
 
-    // Automatically trigger lookup
-    void lookupBarcode(scannedBarcode);
+    if (isHandlingCameraScanRef.current || isRapidDuplicate) {
+      return;
+    }
 
-    // Show success toast
-    toast({
-      title: "Barcode scanned!",
-      description: `Scanned: ${scannedBarcode}`,
-    });
+    isHandlingCameraScanRef.current = true;
+    lastCameraScanRef.current = { barcode: trimmedBarcode, timestamp: now };
+
+    void (async () => {
+      try {
+        // Record scan first; if capped, do not run lookup.
+        await recordScan.mutateAsync({ userId });
+
+        console.log("Barcode scanned from camera:", trimmedBarcode);
+        setBarcode(trimmedBarcode);
+        await lookupBarcode(trimmedBarcode);
+
+        toast({
+          title: "Barcode scanned!",
+          description: `Scanned: ${trimmedBarcode}`,
+        });
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Failed to record scan";
+        const isLimitReached = errorMessage.includes("Daily scan limit reached");
+
+        toast({
+          title: "Camera scanning unavailable",
+          description: isLimitReached
+            ? `Daily scan limit reached (${usage.dailyScanLimit}/day).`
+            : "Failed to record scan. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        // Keep a short lock to absorb duplicate decode callbacks emitted while modal closes.
+        window.setTimeout(() => {
+          isHandlingCameraScanRef.current = false;
+        }, 250);
+      }
+    })();
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -495,12 +548,28 @@ export const ProductForm = ({
               />
               <Button
                 type="button"
-                onClick={() => setIsScannerOpen(true)}
+                onClick={() => {
+                  if (!canCameraScan) {
+                    toast({
+                      title: "Camera scanning unavailable",
+                      description: isFree
+                        ? "Upgrade to Starter to use camera scanning."
+                        : `Daily scan limit reached (${usage.dailyScanLimit}/day).`,
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  setIsScannerOpen(true);
+                }}
                 variant="outline"
                 className="shrink-0"
-                title="Scan with camera"
+                title={canCameraScan ? "Scan with camera" : "Upgrade to scan with camera"}
               >
-                <Camera className="h-4 w-4" />
+                {canCameraScan ? (
+                  <Camera className="h-4 w-4" />
+                ) : (
+                  <Lock className="h-4 w-4" />
+                )}
               </Button>
               <Button
                 type="button"
@@ -578,9 +647,13 @@ export const ProductForm = ({
                     {/* Add new category option at the top */}
                     <SelectItem
                       value="__new__"
-                      className="font-medium text-[#10B981] hover:bg-[#10B981]/10 hover:text-[#059669]"
+                      className={`font-medium ${canCustomCategories ? "text-[#10B981] hover:bg-[#10B981]/10 hover:text-[#059669]" : "text-gray-400"}`}
                     >
-                      + Add new category
+                      {canCustomCategories ? "+ Add new category" : (
+                        <span className="flex items-center gap-1">
+                          <Lock className="h-3 w-3" /> Add new category (Starter+)
+                        </span>
+                      )}
                     </SelectItem>
 
                     {/* Separator */}
