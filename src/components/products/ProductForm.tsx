@@ -47,6 +47,7 @@ interface BatchFormData {
 
 // Storage key for form draft (isolated per browser tab via sessionStorage)
 const FORM_DRAFT_KEY = "product-form-draft";
+const CAMERA_SCAN_DEDUPE_MS = 1500;
 
 export const ProductForm = ({
   product,
@@ -166,6 +167,10 @@ export const ProductForm = ({
 
   // Auto-lookup when opened with an initial barcode (from dashboard scan)
   const hasAutoLookedUp = useRef(false);
+  const isHandlingCameraScanRef = useRef(false);
+  const lastCameraScanRef = useRef<{ barcode: string; timestamp: number } | null>(
+    null,
+  );
   useEffect(() => {
     if (initialBarcode && !hasAutoLookedUp.current) {
       hasAutoLookedUp.current = true;
@@ -331,20 +336,53 @@ export const ProductForm = ({
    * Auto-fills the barcode input and triggers lookup
    */
   const handleBarcodeScanned = (scannedBarcode: string) => {
-    console.log("Barcode scanned from camera:", scannedBarcode);
-    setBarcode(scannedBarcode);
+    const trimmedBarcode = scannedBarcode.trim();
+    const now = Date.now();
+    const lastScan = lastCameraScanRef.current;
+    const isRapidDuplicate =
+      lastScan &&
+      lastScan.barcode === trimmedBarcode &&
+      now - lastScan.timestamp < CAMERA_SCAN_DEDUPE_MS;
 
-    // Record the scan for daily limit tracking
-    void recordScan.mutateAsync({ userId });
+    if (isHandlingCameraScanRef.current || isRapidDuplicate) {
+      return;
+    }
 
-    // Automatically trigger lookup
-    void lookupBarcode(scannedBarcode);
+    isHandlingCameraScanRef.current = true;
+    lastCameraScanRef.current = { barcode: trimmedBarcode, timestamp: now };
 
-    // Show success toast
-    toast({
-      title: "Barcode scanned!",
-      description: `Scanned: ${scannedBarcode}`,
-    });
+    void (async () => {
+      try {
+        // Record scan first; if capped, do not run lookup.
+        await recordScan.mutateAsync({ userId });
+
+        console.log("Barcode scanned from camera:", trimmedBarcode);
+        setBarcode(trimmedBarcode);
+        await lookupBarcode(trimmedBarcode);
+
+        toast({
+          title: "Barcode scanned!",
+          description: `Scanned: ${trimmedBarcode}`,
+        });
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : "Failed to record scan";
+        const isLimitReached = errorMessage.includes("Daily scan limit reached");
+
+        toast({
+          title: "Camera scanning unavailable",
+          description: isLimitReached
+            ? `Daily scan limit reached (${usage.dailyScanLimit}/day).`
+            : "Failed to record scan. Please try again.",
+          variant: "destructive",
+        });
+      } finally {
+        // Keep a short lock to absorb duplicate decode callbacks emitted while modal closes.
+        window.setTimeout(() => {
+          isHandlingCameraScanRef.current = false;
+        }, 250);
+      }
+    })();
   };
 
   const handleSubmit = (e: React.FormEvent) => {

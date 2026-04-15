@@ -335,11 +335,48 @@ export const subscriptionRouter = createTRPCRouter({
     .input(z.object({ userId: z.string().uuid() }))
     .mutation(async ({ input }) => {
       const today = new Date().toISOString().split("T")[0];
+      const { data: sub } = await supabaseAdmin
+        .from("subscriptions")
+        .select("tier")
+        .eq("user_id", input.userId)
+        .single();
 
-      const { data, error } = await supabaseAdmin.rpc("increment_scan_count", {
-        p_user_id: input.userId,
-        p_scan_date: today,
-      });
+      const tier: SubscriptionTier = (sub?.tier as SubscriptionTier) ?? "free";
+      const plan = getPlanConfig(tier);
+
+      if (!plan.canCameraScan) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: "Camera scanning is not available on your current plan.",
+        });
+      }
+
+      // Unlimited tiers can use the lightweight increment path.
+      if (plan.cameraScanLimit === Infinity) {
+        const { data, error } = await supabaseAdmin.rpc("increment_scan_count", {
+          p_user_id: input.userId,
+          p_scan_date: today,
+        });
+
+        if (error) {
+          throw new TRPCError({
+            code: "INTERNAL_SERVER_ERROR",
+            message: "Failed to record scan",
+          });
+        }
+
+        return { scanCount: data as number };
+      }
+
+      // Finite plans use an atomic capped increment to prevent race-condition overflow.
+      const { data, error } = await supabaseAdmin.rpc(
+        "increment_scan_count_if_allowed",
+        {
+          p_user_id: input.userId,
+          p_scan_date: today,
+          p_max_limit: plan.cameraScanLimit,
+        },
+      );
 
       if (error) {
         throw new TRPCError({
@@ -348,7 +385,18 @@ export const subscriptionRouter = createTRPCRouter({
         });
       }
 
-      return { scanCount: data as number };
+      const rpcRow = Array.isArray(data) ? data[0] : data;
+      const allowed = Boolean(rpcRow?.allowed);
+      const scanCount = Number(rpcRow?.scan_count ?? 0);
+
+      if (!allowed) {
+        throw new TRPCError({
+          code: "FORBIDDEN",
+          message: `Daily scan limit reached (${plan.cameraScanLimit}/day).`,
+        });
+      }
+
+      return { scanCount };
     }),
 
   checkLimit: publicProcedure
